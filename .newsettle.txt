@@ -1,0 +1,61 @@
+                // Settle server-side via settle_duel().
+                //
+                // The old code did all of this in the browser: it wrote the
+                // score, re-queried for an opponent, decided the winner and
+                // then added the payout to wallet_balance itself. Two players
+                // queueing at the same instant could both read the same
+                // opponent row and both get paid, and the balance write was
+                // freely editable in DevTools. settle_duel() does all of it in
+                // one locked, server-side transaction.
+                const client = getSupabaseAuthClient();
+                if (client && activeUser.id) {
+                    let settled = null;
+                    try {
+                        const { data, error } = await client.rpc('settle_duel', {
+                            p_challenge_id: challenge.id,
+                            p_score: score
+                        });
+                        if (error) throw error;
+                        settled = data;
+                    } catch (e) {
+                        console.warn('settle_duel failed:', e);
+                        if (subEl) {
+                            subEl.textContent = 'Could not reach the server to submit your score. Your stake is safe — please try again.';
+                        }
+                    }
+
+                    if (settled && settled.matched) {
+                        const oppScoreText = Number(settled.opponent_score || 0).toLocaleString();
+                        const oppLabel = document.getElementById('match-opponent-label');
+                        const oppScoreEl = document.getElementById('match-score-opponent');
+                        if (oppLabel) oppLabel.textContent = 'Opponent';
+                        if (oppScoreEl) oppScoreEl.textContent = oppScoreText;
+
+                        if (settled.is_tie) {
+                            if (titleEl) titleEl.textContent = "It's a Tie!";
+                            if (subEl) subEl.textContent = `Both scores were ${score.toLocaleString()} pts. Your ₦${challenge.stake.toLocaleString()} stake has been refunded.`;
+                        } else if (settled.won) {
+                            const won = Number(settled.payout || challenge.payout);
+                            if (titleEl) titleEl.textContent = '🏆 You Won!';
+                            if (subEl) subEl.textContent = `${score.toLocaleString()} pts vs ${oppScoreText} pts. ₦${won.toLocaleString()} added to your wallet!`;
+                        } else {
+                            if (titleEl) titleEl.textContent = 'You Lost This Round';
+                            if (subEl) subEl.textContent = `${score.toLocaleString()} pts vs ${oppScoreText} pts. Better luck next time!`;
+                        }
+
+                        if (homeBtn) homeBtn.classList.add('hidden');
+                        if (cancelBtn) cancelBtn.classList.add('hidden');
+                        if (playMoreBtn) playMoreBtn.classList.remove('hidden');
+                        if (doneBtn) doneBtn.classList.remove('hidden');
+                        activeStakeChallenge = null;
+
+                        // The server moved the money, so re-read the balance
+                        // instead of guessing at it in the browser.
+                        await refreshWalletFromServer();
+                    } else if (settled) {
+                        // No opponent yet — stay queued and wait for realtime.
+                        if (subEl) subEl.textContent = `Your score: ${score.toLocaleString()} pts. Looking for another player at ₦${challenge.stake.toLocaleString()}… Match stays active in background!`;
+                    }
+                }
+                renderActiveChallenges();
+                renderDashboardScores();
