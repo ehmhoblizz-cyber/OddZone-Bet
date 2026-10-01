@@ -4167,31 +4167,64 @@
             launchGameModule('practice');
         }
 
-        // Builds a same-origin, root-relative URL for a game file. The catalog
-        // stores paths relative to the repo root, so a prefix of "./" or "/games"
-        // is stripped before prefixing "/" -- otherwise you get "/games/games/..."
-        // or "//games/..." and GitHub Pages answers with its 404 page.
-        function resolveGameUrl(pathOrUrl) {
-            const raw = String(pathOrUrl || '').trim();
-            if (/^https?:\/\//i.test(raw) || raw.startsWith('data:') || raw.startsWith('blob:')) return raw;
-            // Catalog paths are relative to the REPO ROOT and already include
-            // the "games/" segment, so only a leading "./" is stripped here --
-            // dropping "games/" would request /pacman/... instead of
-            // /games/pacman/... and 404 on every game.
-            let cleaned = raw.replace(/^\.\//, '');
-            if (cleaned.startsWith('/')) cleaned = cleaned.slice(1);
-            return '/' + cleaned;
+        // The directory that index.html itself is served from, always with a
+        // trailing slash.
+        //
+        // This repo is published as a PROJECT PAGE at
+        // https://<user>.github.io/OddZone-Bet/, so the site root is
+        // /OddZone-Bet/ and NOT /. A root-relative "/games/..." therefore
+        // resolves against the host root, escapes the project directory, and
+        // GitHub Pages answers with its 404 page. Deriving the base from the
+        // document's own location is what keeps the games working whether the
+        // app is hosted at the root, under a project sub-path, or opened
+        // straight off disk.
+        function getAppBasePath() {
+            const path = window.location.pathname || '/';
+            const lastSlash = path.lastIndexOf('/');
+            // For "/OddZone-Bet/index.html" the base is "/OddZone-Bet/".
+            // For "/" the base is "/" (already correct, no change needed).
+            const base = lastSlash === -1 ? '/' : path.slice(0, lastSlash + 1);
+            return base.endsWith('/') ? base : base + '/';
         }
 
-        // True when the page was served from the site root rather than a
-        // sub-path. Locally in a subfolder the root-relative path would break,
-        // so fall back to a document-relative path.
-        function buildGameUrl(pathOrUrl) {
-            const url = resolveGameUrl(pathOrUrl);
-            if (url.startsWith('/') && window.location.origin.indexOf('file://') === 0) {
-                return url.replace(/^\//, '');
+        // Builds a same-origin URL for a game file. The catalog stores paths
+        // relative to the REPO ROOT, so a leading "./" or "/" is stripped, then
+        // the result is re-based onto the app's own directory. Without the
+        // re-basing you get "/games/games/..." (double prefix) or
+        // "//games/..." (protocol-relative, which the browser treats as
+        // http://games/... — a different host entirely).
+        function resolveGameUrl(pathOrUrl) {
+            const raw = String(pathOrUrl || '').trim();
+            if (!raw) return '';
+            // Absolute URLs, data: and blob: are used as-is.
+            if (/^(https?:|data:|blob:)/i.test(raw)) return raw;
+
+            // Strip any leading "./" or "/" so the path is repo-root relative.
+            let cleaned = raw.replace(/^\.\//, '').replace(/^\/+/, '');
+            if (!cleaned) return '';
+
+            // A protocol-relative URL ("//host/x") is a DIFFERENT origin, not a
+            // local file, so it must never be rebased onto the app directory.
+            if (raw.startsWith('//')) return raw;
+
+            // Collapse any accidental duplicated prefix, e.g. someone edits a
+            // catalog path to "games/games/breakout.html".
+            while (cleaned.startsWith('games/') && cleaned.indexOf('/', 6) > 0) {
+                // Only strip when it would otherwise duplicate the "games" root.
+                const rest = cleaned.slice(6);
+                if (rest.startsWith('games/')) cleaned = rest;
+                else break;
             }
-            return url;
+
+            const base = getAppBasePath();
+            return base + cleaned;
+        }
+
+        // resolveGameUrl() now always returns a path under the app's own
+        // directory, so it is correct on a sub-path and on disk alike. This
+        // wrapper remains for the call sites that expect a "build" step.
+        function buildGameUrl(pathOrUrl) {
+            return resolveGameUrl(pathOrUrl);
         }
 
         function launchGameModule(mode) {
