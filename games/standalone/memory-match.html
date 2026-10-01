@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Memory Match</title>
+<style>
+*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#142322;color:#f1f5e9;font:600 14px system-ui,sans-serif}body{display:grid;place-items:center}.shell{width:min(100vw,100dvh);padding:14px}.head{display:flex;justify-content:space-between;padding:5px 2px 12px;color:#c5e2c9}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;aspect-ratio:1}.card{min-width:0;border:1px solid #55776b;border-radius:8px;background:#254239;color:white;font-size:clamp(20px,8vw,38px);font-weight:800;touch-action:manipulation}.card.open,.card.matched{background:#477d67;border-color:#a6dfb7}.card.matched{opacity:.72}
+</style>
+</head>
+<body>
+    <main class="shell"><div class="head"><strong>MEMORY MATCH</strong><span>Pairs <b id="pairs">0</b>/8</span></div><div class="grid" id="grid" aria-label="Memory card board"></div></main>
+<script>
+(()=>{
+  const symbols=['1','2','3','4','5','6','7','8'],
+        grid=document.getElementById('grid'),
+        pairsNode=document.getElementById('pairs');
+  let cards=[],open=[],matched=0,attempts=0,locked=false,ended=false,finished=false;
+
+  // Score only ever goes UP: 100 per matched pair, plus a 10-point bonus for
+  // every pair still hidden. The previous formula subtracted the miss count,
+  // which made the number fall while you played and sank the saved result.
+  const readScore=()=>matched*100+(symbols.length-matched)*10;
+  const boardScore=()=>matched*10; // what the on-screen Pairs counter shows
+
+  function reportOver(){
+    if(finished)return;
+    finished=true;
+    try{parent.postMessage({type:'oddzone:game-complete',score:readScore()},'*')}catch(e){}
+  }
+
+  function start(){
+    cards=[...symbols,...symbols].sort(()=>Math.random()-.5);
+    open=[];matched=0;attempts=0;locked=false;ended=false;finished=false;
+    pairsNode.textContent='0';
+    grid.replaceChildren();
+    cards.forEach((symbol,index)=>{
+      const button=document.createElement('button');
+      button.type='button';
+      button.className='card';
+      button.textContent='?';
+      button.setAttribute('aria-label',`Card ${index+1}`);
+      button.addEventListener('click',()=>flip(index,button));
+      grid.appendChild(button);
+    });
+  }
+
+  function flip(index,button){
+    if(ended||locked||button.classList.contains('matched')||open.some(card=>card.index===index))return;
+    button.textContent=cards[index];
+    button.classList.add('open');
+    open.push({index,button});
+    if(open.length!==2)return;
+
+    attempts++;
+    locked=true;
+    if(cards[open[0].index]===cards[open[1].index]){
+      open.forEach(card=>card.button.classList.add('matched'));
+      matched++;
+      pairsNode.textContent=String(matched);
+      open=[];
+      locked=false;
+      if(matched===symbols.length){ended=true;reportOver();}
+    }else{
+      setTimeout(()=>{
+        open.forEach(card=>{card.button.textContent='?';card.button.classList.remove('open')});
+        open=[];
+        locked=false;
+      },700);
+    }
+  }
+
+  function end(){
+    ended=true;locked=true;
+    open.forEach(card=>card.button.textContent=cards[card.index]);
+    reportOver();
+  }
+
+  window.__oddzoneStart=start;
+  window.__oddzoneEnd=end;
+  window.__oddzoneReadScore=readScore;
+  window.__oddzoneIsOver=()=>ended;
+  start();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Breakout</title>
+<style>
+*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#111c2b;color:#fff;font:600 14px system-ui,sans-serif}body{display:grid;place-items:center}.shell{width:min(100vw,61.5dvh);height:min(100dvh,162.6vw);position:relative}canvas{width:100%;height:100%;display:block;touch-action:none}.tag{position:absolute;inset:12px 0 auto;text-align:center;color:#d6f3ff;pointer-events:none}
+</style>
+</head>
+<body>
+<div class="shell"><canvas id="game" width="390" height="634" aria-label="Breakout game"></canvas><div class="tag">BRICK BREAKER &nbsp; SCORE <span id="score">0</span></div></div>
+<script>
+(()=>{const canvas=document.getElementById('game'),ctx=canvas.getContext('2d'),scoreNode=document.getElementById('score'),W=canvas.width,H=canvas.height,rows=6,cols=8,gap=5,brickW=(W-36-gap*(cols-1))/cols,bricks=[];let paddleX=W/2,ball={x:W/2,y:H-70,vx:150,vy:-230,r:7},score=0,running=false,ended=false,last=0;function reset(){bricks.length=0;for(let row=0;row<rows;row++)for(let col=0;col<cols;col++)bricks.push({x:18+col*(brickW+gap),y:66+row*22,w:brickW,h:17,alive:true,row});paddleX=W/2;ball={x:W/2,y:H-70,vx:150,vy:-230,r:7};score=0;scoreNode.textContent='0';running=true;ended=false;last=performance.now()}function stop(){running=false;ended=true;try{parent.postMessage({type:'oddzone:game-complete',score},'*')}catch(e){}}function tick(now){const dt=Math.min((now-last)/1000,.04);last=now;if(running){ball.x+=ball.vx*dt;ball.y+=ball.vy*dt;if(ball.x<ball.r||ball.x>W-ball.r)ball.vx*=-1;if(ball.y<ball.r+38)ball.vy=Math.abs(ball.vy);if(ball.vy>0&&ball.y+ball.r>=H-42&&ball.y<H-30&&Math.abs(ball.x-paddleX)<53){ball.vy=-Math.abs(ball.vy);ball.vx+=(ball.x-paddleX)*2.5}if(ball.y>H+20)stop();for(const brick of bricks){if(brick.alive&&ball.x+ball.r>brick.x&&ball.x-ball.r<brick.x+brick.w&&ball.y+ball.r>brick.y&&ball.y-ball.r<brick.y+brick.h){brick.alive=false;ball.vy*=-1;score+=10;scoreNode.textContent=String(score);break}}if(bricks.every(brick=>!brick.alive))stop()}ctx.fillStyle='#111c2b';ctx.fillRect(0,0,W,H);const colors=['#3fc4bd','#e2ca55','#e98856','#d97587','#7da7df','#a987d2'];bricks.forEach(brick=>{if(brick.alive){ctx.fillStyle=colors[brick.row];ctx.fillRect(brick.x,brick.y,brick.w,brick.h)}});ctx.fillStyle='#b5f0e6';ctx.fillRect(paddleX-48,H-35,96,10);ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(ball.x,ball.y,ball.r,0,Math.PI*2);ctx.fill();if(!running){ctx.fillStyle='rgba(4,10,18,.72)';ctx.fillRect(24,H/2-45,W-48,90);ctx.fillStyle='white';ctx.textAlign='center';ctx.font='700 22px system-ui';ctx.fillText(ended?'ROUND OVER':'BREAKOUT',W/2,H/2-5);ctx.font='14px system-ui';ctx.fillText('Tap or press Space to start',W/2,H/2+23)}requestAnimationFrame(tick)}canvas.addEventListener('pointermove',event=>{const rect=canvas.getBoundingClientRect();paddleX=(event.clientX-rect.left)*W/rect.width});canvas.addEventListener('pointerdown',()=>{if(!running)reset()});window.addEventListener('keydown',event=>{if(event.code==='Space'){event.preventDefault();if(!running)reset()}if(event.code==='ArrowLeft')paddleX=Math.max(50,paddleX-22);if(event.code==='ArrowRight')paddleX=Math.min(W-50,paddleX+22)});window.__oddzoneStart=reset;window.__oddzoneEnd=stop;window.__oddzoneReadScore=()=>score;window.__oddzoneIsOver=()=>ended;requestAnimationFrame(tick)})();
+</script>
+</body>
+</html>

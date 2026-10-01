@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Pipe Hopper</title>
+<style>
+*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#082c3b;color:#fff;font:600 14px system-ui,sans-serif}body{display:grid;place-items:center}#stage{position:relative;width:min(100vw,56.25dvh);height:min(100dvh,177.78vw);overflow:hidden;background:#78d4df;touch-action:none}canvas{width:100%;height:100%;display:block}.hint{position:absolute;inset:auto 0 12px;text-align:center;color:#123a45;font-size:12px;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="game" width="360" height="640" aria-label="Pipe Hopper game"></canvas><div class="hint">Tap or press Space to flap</div></div>
+<script>
+(()=>{const canvas=document.getElementById('game'),ctx=canvas.getContext('2d');const W=canvas.width,H=canvas.height;let birdY=290,velocity=0,obstacles=[],score=0,state='ready',last=0,spawn=0;function reset(){birdY=290;velocity=0;obstacles=[];score=0;spawn=0;state='playing'}function flap(){if(state!=='playing')reset();velocity=-390}function end(){state='over';velocity=0;try{parent.postMessage({type:'oddzone:game-complete',score},'*')}catch(e){}}function readScore(){return score}function tick(now){const dt=Math.min((now-last)/1000,.04);last=now;ctx.fillStyle='#78d4df';ctx.fillRect(0,0,W,H);ctx.fillStyle='#b7edda';for(let i=0;i<5;i++){ctx.beginPath();ctx.arc((i*102+(now*.012)%480)%480-50,95+i%2*34,28,0,Math.PI*2);ctx.fill()}ctx.fillStyle='#4eaa74';ctx.fillRect(0,H-72,W,72);ctx.fillStyle='#d4c65d';ctx.fillRect(0,H-74,W,8);if(state==='playing'){birdY+=velocity*dt;velocity+=1100*dt;if(now-spawn>1450){spawn=now;const gap=150,top=105+Math.random()*245;obstacles.push({x:W+12,top,passed:false,gap})}obstacles.forEach(pipe=>{pipe.x-=150*dt;ctx.fillStyle='#247a53';ctx.fillRect(pipe.x,0,58,pipe.top);ctx.fillRect(pipe.x,pipe.top+pipe.gap,58,H);ctx.fillStyle='#34996b';ctx.fillRect(pipe.x-5,pipe.top-16,68,16);ctx.fillRect(pipe.x-5,pipe.top+pipe.gap,68,16);if(!pipe.passed&&pipe.x+58<68){pipe.passed=true;score++}if(pipe.x<86&&pipe.x+58>48&&(birdY-12<pipe.top||birdY+12>pipe.top+pipe.gap))end()});obstacles=obstacles.filter(pipe=>pipe.x>-70);if(birdY>H-84||birdY<0)end()}ctx.fillStyle='#f6dc61';ctx.beginPath();ctx.ellipse(70,birdY,17,13,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(77,birdY-5,4,0,Math.PI*2);ctx.fill();ctx.fillStyle='#133641';ctx.fillRect(76,birdY-6,2,3);ctx.fillStyle='#f08549';ctx.beginPath();ctx.moveTo(84,birdY);ctx.lineTo(96,birdY+4);ctx.lineTo(84,birdY+7);ctx.fill();ctx.textAlign='center';ctx.fillStyle='#123a45';ctx.font='800 42px system-ui';ctx.fillText(String(score),W/2,78);if(state!=='playing'){ctx.fillStyle='rgba(4,29,39,.72)';ctx.fillRect(20,236,W-40,140);ctx.fillStyle='#fff';ctx.font='800 25px system-ui';ctx.fillText(state==='ready'?'PIPE HOPPER':'FLIGHT ENDED',W/2,286);ctx.font='600 15px system-ui';ctx.fillText(state==='ready'?'Tap to start':'Tap to retry',W/2,322);if(state==='over')ctx.fillText('Score  '+score,W/2,350)}requestAnimationFrame(tick)}canvas.addEventListener('pointerdown',flap);window.addEventListener('keydown',event=>{if(event.code==='Space'||event.code==='ArrowUp'){event.preventDefault();flap()}});window.__oddzoneStart=reset;window.__oddzoneEnd=end;window.__oddzoneReadScore=readScore;window.__oddzoneIsOver=()=>state==='over';requestAnimationFrame(tick)})();
+</script>
+</body>
+</html>
