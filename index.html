@@ -6,7 +6,11 @@
     <title>OddZone Bet</title>
     
     <!-- PWA & Theme Meta Tags -->
-    <link rel="manifest" href="/manifest.json">
+    <!-- Relative, not root-relative: the app is served from
+         https://<user>.github.io/OddZone-Bet/, so "/manifest.json" would
+         resolve against the host root, miss the project directory and 404,
+         leaving the app uninstallable as a PWA. -->
+    <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#7c4dff">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -4207,14 +4211,9 @@
             // local file, so it must never be rebased onto the app directory.
             if (raw.startsWith('//')) return raw;
 
-            // Collapse any accidental duplicated prefix, e.g. someone edits a
-            // catalog path to "games/games/breakout.html".
-            while (cleaned.startsWith('games/') && cleaned.indexOf('/', 6) > 0) {
-                // Only strip when it would otherwise duplicate the "games" root.
-                const rest = cleaned.slice(6);
-                if (rest.startsWith('games/')) cleaned = rest;
-                else break;
-            }
+            // Collapse an accidentally duplicated "games/games/..." prefix, so
+            // editing a catalog path that way still resolves.
+            while (/^games\/games\//.test(cleaned)) cleaned = cleaned.slice(6);
 
             const base = getAppBasePath();
             return base + cleaned;
