@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Neon Serpent</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#071518!important;position:relative!important;display:grid!important;place-items:center!important}body>.note1,body>.img1,body>.img2,body>.title,body>#intro,body>.button-container,body>.youtube-music,body>.MDJAminDiv{display:none!important}#myCanvas{position:static!important;display:block;width:min(94vw,70dvh)!important;height:auto!important;aspect-ratio:1;border:1px solid #51c79a!important;border-radius:8px;box-shadow:0 0 26px rgba(54,196,145,.22);touch-action:none}.host-controls{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);display:grid;grid-template-columns:repeat(3,48px);gap:6px}.host-controls button{height:42px;border:1px solid #4a8775;border-radius:7px;background:#173d35;color:#eafff4;font-size:17px}.host-controls [data-dir=up]{grid-column:2}.host-controls [data-dir=left]{grid-column:1;grid-row:2}.host-controls [data-dir=down]{grid-column:2;grid-row:2}.host-controls [data-dir=right]{grid-column:3;grid-row:2}
+</style>
+</head>
+<body>
+<canvas id="myCanvas" aria-label="Neon Serpent game"></canvas>
+<div class="host-controls" aria-label="Snake movement controls"><button data-dir="up" aria-label="Up">&#8593;</button><button data-dir="left" aria-label="Left">&#8592;</button><button data-dir="down" aria-label="Down">&#8595;</button><button data-dir="right" aria-label="Right">&#8594;</button></div>
+<script src="Manual.js"></script>
+<script>
+window.__oddzoneReadScore=function(){return score};
+window.__oddzoneStart=function(){restartGame()};
+window.__oddzoneEnd=function(){paused=true;gameOver=true};
+window.__oddzoneSetDirection=function(value){if(value==='up'&&direction.y===0)direction={x:0,y:-1};if(value==='down'&&direction.y===0)direction={x:0,y:1};if(value==='left'&&direction.x===0)direction={x:-1,y:0};if(value==='right'&&direction.x===0)direction={x:1,y:0};if(paused&&!gameOver)window.__oddzoneStart()};
+document.querySelectorAll('[data-dir]').forEach(button=>button.addEventListener('click',()=>window.__oddzoneSetDirection(button.dataset.dir)));
+</script>
+</body>
+</html>

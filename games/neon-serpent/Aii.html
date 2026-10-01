@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Serpent: Apple Quest</title>
+    <link rel="icon" type="image/png" href="./body/head.png">
+    <link rel="stylesheet" href="styles.css"> <!-- Link to external CSS file -->
+</head>
+<body>
+
+    <div class="note1">
+        <img src="/webdesign/apple.gif" alt="">
+    </div>
+    <div class="img1">
+        <img src="webdesign/GAME.gif" alt="">
+    </div>
+    <div class="img2">
+        <img src="webdesign/note2.png" alt="">
+    </div>
+    <div class="title">
+        <img src="webdesign/gametitle.png" alt="">
+    </div>
+
+    <div id="intro" class="intro">
+        <img src="webdesign/Gameintro.png" alt="Intro Image">
+    </div>
+
+
+    <!-- Button Container for Play Options -->
+    <div class="button-container">
+        <button onclick="startManual()">PLAY AS A PLAYER</button>
+       <!---- <button onclick="startAI()">You are playing in Ai Control</button> -->
+    </div>
+
+    <canvas id="myCanvas"></canvas>
+
+    <!-- YouTube Music Embed -->
+    <div class="youtube-music">
+        <iframe width="560" height="315" src="https://www.youtube.com/embed/mRN_T6JkH-c?autoplay=1&loop=1&playlist=mRN_T6JkH-c&mute=1" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+    </div>
+
+    <script src="AI.js"></script>
+    <script>
+        // Wait for the DOM to load
+        window.addEventListener('DOMContentLoaded', (event) => {
+            const intro = document.getElementById('intro');
+            const content = document.getElementById('content');
+
+            // Set a timer for 5 seconds before starting the fade-out effect
+            setTimeout(() => {
+                // Fade out the intro screen
+                intro.style.opacity = 0;
+                intro.style.pointerEvents = 'none'; // Disable interaction with the intro screen
+
+                // Wait for the fade-out to finish and then hide it
+                setTimeout(() => {
+                    intro.style.display = 'none';
+                    content.classList.add('show'); // Show the main content
+                }, 2000); // Delay must match the fade-out transition duration
+            }, 5000); // Time to show the intro image (5 seconds)
+        });
+
+        function startManual() {
+            window.location.href = "Manuall.html";  // Redirect to manual mode
+        }
+    </script>
+</body>
+</html>

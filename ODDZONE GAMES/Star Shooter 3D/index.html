@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+  <title>Star Shooter 3D - Epic Space Combat</title>
+  <meta name="description" content="An intense 3D arcade space shooter game built with Three.js and Web Audio API. Pilot your fighter, destroy enemy swarms, collect power-ups, defeat colossal sector bosses, and survive across endless waves.">
+  <link rel="stylesheet" href="style.css">
+  <!-- Three.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+</head>
+<body>
+  <div id="gameContainer">
+    <!-- WebGL Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Damage Screen Flash Overlay -->
+    <div id="damageOverlay" class="damage-overlay"></div>
+
+    <!-- In-Game HUD -->
+    <div id="hudOverlay" class="hud-overlay hidden">
+      <!-- Boss Health Bar Container (Active on Wave 5, 10, 15...) -->
+      <div id="bossHealthContainer" class="boss-health-container hidden">
+        <div class="boss-title-bar">
+          <span class="boss-alert-icon">⚠️</span>
+          <span id="bossName" class="boss-name">DREADNOUGHT VEX-5</span>
+          <span id="bossHealthText" class="boss-health-text">100%</span>
+        </div>
+        <div class="boss-health-bar-track">
+          <div id="bossHealthBarFill" class="boss-health-bar-fill"></div>
+        </div>
+      </div>
+
+      <!-- Top HUD Header -->
+      <div class="hud-top-bar">
+        <!-- Health / Shield Meter -->
+        <div class="hud-card hud-health-card">
+          <div class="hud-label"><span class="hud-icon">🛡️</span> SHIELD INTEGRITY</div>
+          <div class="health-meter" id="healthMeter">
+            <div class="health-bar-segment active" data-index="1"></div>
+            <div class="health-bar-segment active" data-index="2"></div>
+            <div class="health-bar-segment active" data-index="3"></div>
+            <div class="health-bar-segment active" data-index="4"></div>
+            <div class="health-bar-segment active" data-index="5"></div>
+          </div>
+          <div class="health-text" id="healthText">100%</div>
+        </div>
+
+        <!-- Wave / Kills Badge -->
+        <div class="hud-card hud-wave-card">
+          <div class="hud-label">SECTOR WAVE</div>
+          <div class="hud-value wave-value" id="hudWave">01</div>
+          <div class="hud-subvalue" id="hudKillsContainer">KILLS: <span id="hudKills">0</span> / <span id="hudNextWave">10</span></div>
+        </div>
+
+        <!-- Score Badge -->
+        <div class="hud-card hud-score-card">
+          <div class="hud-label">SCORE</div>
+          <div class="hud-value score-value" id="hudScore">000000</div>
+          <div class="hud-subvalue">HIGH: <span id="hudHighScore">000000</span></div>
+        </div>
+
+        <!-- Utility Buttons (Mute & Pause) -->
+        <div class="hud-actions">
+          <button id="btnAudioToggle" class="hud-icon-btn" title="Toggle Sound (M)" aria-label="Toggle Sound">
+            <span id="audioIcon">🔊</span>
+          </button>
+          <button id="btnPauseGame" class="hud-icon-btn" title="Pause Game (ESC / P)" aria-label="Pause Game">
+            <span>⏸️</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Active Power-Ups Badges Stack -->
+      <div id="activePowerUpsContainer" class="active-powerups-container">
+        <div id="powerUpShield" class="powerup-badge shield hidden">
+          <span class="powerup-icon">🛡️</span>
+          <div class="powerup-info">
+            <span class="powerup-title">INVULNERABLE</span>
+            <span id="powerUpShieldTimer" class="powerup-timer">5.0s</span>
+          </div>
+          <div class="powerup-progress-bar"><div id="powerUpShieldBar" class="powerup-progress-fill"></div></div>
+        </div>
+        <div id="powerUpRapid" class="powerup-badge rapid hidden">
+          <span class="powerup-icon">⚡</span>
+          <div class="powerup-info">
+            <span class="powerup-title">RAPID FIRE</span>
+            <span id="powerUpRapidTimer" class="powerup-timer">8.0s</span>
+          </div>
+          <div class="powerup-progress-bar"><div id="powerUpRapidBar" class="powerup-progress-fill"></div></div>
+        </div>
+        <div id="powerUpMultiplier" class="powerup-badge multiplier hidden">
+          <span class="powerup-icon">💎</span>
+          <div class="powerup-info">
+            <span class="powerup-title">2X MULTIPLIER</span>
+            <span id="powerUpMultiplierTimer" class="powerup-timer">10.0s</span>
+          </div>
+          <div class="powerup-progress-bar"><div id="powerUpMultiplierBar" class="powerup-progress-fill"></div></div>
+        </div>
+      </div>
+
+      <!-- Floating Pickup Toast Notification -->
+      <div id="powerUpToast" class="powerup-toast hidden">
+        <span id="toastIcon" class="toast-icon">⚡</span>
+        <span id="toastText" class="toast-text">RAPID FIRE ACTIVATED!</span>
+      </div>
+
+      <!-- Targeting Crosshair / Reticle -->
+      <div id="reticle" class="reticle">
+        <div class="reticle-outer"></div>
+        <div class="reticle-inner"></div>
+        <div class="reticle-dot"></div>
+      </div>
+
+      <!-- Controls Reminder Bar at bottom -->
+      <div class="hud-bottom-bar" id="hudBottomBar">
+        <div class="control-hint"><span>[MOUSE]</span> AIM & STEER</div>
+        <div class="control-hint"><span>[L-CLICK / SPACE]</span> FIRE LASERS</div>
+        <div class="control-hint"><span>[ESC / P]</span> PAUSE</div>
+        <div class="control-hint"><span>[M]</span> MUTE</div>
+      </div>
+    </div>
+
+    <!-- Mobile Touch Controls Overlay (Auto-enabled on touch devices) -->
+    <div id="mobileTouchControls" class="mobile-touch-overlay hidden">
+      <!-- Left Steering Touch Area -->
+      <div id="touchSteerZone" class="touch-zone touch-zone-left">
+        <div id="touchJoystickBase" class="touch-joystick-base">
+          <div id="touchJoystickStick" class="touch-joystick-stick"></div>
+        </div>
+        <div class="touch-hint-text">DRAG TO STEER</div>
+      </div>
+
+      <!-- Right Firing Touch Area -->
+      <div id="touchFireZone" class="touch-zone touch-zone-right">
+        <div id="touchFireButton" class="touch-fire-btn">
+          <span class="fire-icon">⚡</span>
+          <span class="fire-text">FIRE</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Floating Wave Announcement Banner -->
+    <div id="waveBanner" class="wave-banner hidden">
+      <div class="wave-banner-glow"></div>
+      <div class="wave-banner-sub" id="waveBannerSub">WARNING: ENEMY TRANSMISSION DETECTED</div>
+      <div class="wave-banner-title" id="waveBannerText">WAVE 1: COMMENCE PATROL</div>
+    </div>
+
+    <!-- Start Menu Screen -->
+    <div id="startScreen" class="menu-overlay">
+      <div class="menu-card glass-panel start-card">
+        <div class="game-logo-container">
+          <div class="game-subtitle">DEEP SPACE COMBAT SIMULATION</div>
+          <h1 class="game-title">STAR SHOOTER <span class="neon-pink">3D</span></h1>
+          <div class="title-glow-line"></div>
+        </div>
+
+        <p class="mission-briefing">
+          Pilot your advanced starfighter through hostile cosmic sectors. Annihilate enemy drone swarms, grab power-ups, defeat colossal sector bosses, and survive escalating waves!
+        </p>
+
+        <!-- Interactive Mission Intel & Threat Database Tabs -->
+        <div class="intel-tabs-container">
+          <div class="intel-tabs-header">
+            <button type="button" class="intel-tab-btn active" data-tab="tabEnemies">🎯 ENEMY DOSSIER</button>
+            <button type="button" class="intel-tab-btn" data-tab="tabPowerUps">⚡ POWER-UPS</button>
+            <button type="button" class="intel-tab-btn" data-tab="tabControls">🎮 FLIGHT CONTROLS</button>
+          </div>
+
+          <!-- Tab 1: Enemy Target Objects Intel -->
+          <div class="intel-tab-content active" id="tabEnemies">
+            <div class="enemy-intel-grid">
+              <!-- Scout Drone -->
+              <div class="enemy-card scout">
+                <div class="enemy-card-header">
+                  <span class="enemy-icon">🔴</span>
+                  <span class="enemy-name">VIPER RAZORWING</span>
+                  <span class="enemy-pts neon-cyan">+150 PTS</span>
+                </div>
+                <div class="enemy-tags">
+                  <span class="tag">1 HP</span>
+                  <span class="tag danger">2X SPEED</span>
+                  <span class="tag">NEEDLE INTERCEPTOR</span>
+                </div>
+                <p class="enemy-desc">
+                  <strong>Appearance:</strong> Elongated needle-sharp cockpit, glowing crimson canopy, forward-swept razor wings, and a pulsing rear ion flame cone.<br>
+                  <strong>Combat Intel:</strong> Ultra-fast swarmer that closes in at extreme velocity. Leads attack waves; prioritize early target acquisition.
+                </p>
+              </div>
+
+              <!-- Armored Tank -->
+              <div class="enemy-card tank">
+                <div class="enemy-card-header">
+                  <span class="enemy-icon">🟠</span>
+                  <span class="enemy-name">GOLIATH DESTROYER</span>
+                  <span class="enemy-pts neon-amber">+300 PTS</span>
+                </div>
+                <div class="enemy-tags">
+                  <span class="tag danger">3 HP</span>
+                  <span class="tag">0.6X SPEED</span>
+                  <span class="tag danger">2 COLLISION DMG</span>
+                </div>
+                <p class="enemy-desc">
+                  <strong>Appearance:</strong> Heavy gunmetal bulkheads, front wedge ramming prow, dual rotating shield generator rings, and quad engine exhausts.<br>
+                  <strong>Combat Intel:</strong> Heavy 3 HP fortress. Deals double damage on collision and unleashes a massive shockwave on destruction.
+                </p>
+              </div>
+
+              <!-- Laser Shooter -->
+              <div class="enemy-card shooter">
+                <div class="enemy-card-header">
+                  <span class="enemy-icon">🟣</span>
+                  <span class="enemy-name">SPECTER GUNSHIP</span>
+                  <span class="enemy-pts neon-pink">+250 PTS</span>
+                </div>
+                <div class="enemy-tags">
+                  <span class="tag">2 HP</span>
+                  <span class="tag danger">FIRES RED LASERS</span>
+                  <span class="tag">TWIN CANNONS</span>
+                </div>
+                <p class="enemy-desc">
+                  <strong>Appearance:</strong> Twin catamaran pontoons, central command sensor eye, swept winglets, and dual forward long-range plasma cannons.<br>
+                  <strong>Combat Intel:</strong> Periodically aims and fires lethal glowing red laser bolts directly at your hull. Maneuver to evade!
+                </p>
+              </div>
+
+              <!-- Standard Interceptor -->
+              <div class="enemy-card basic">
+                <div class="enemy-card-header">
+                  <span class="enemy-icon">🔺</span>
+                  <span class="enemy-name">CRIMSON TRIDENT</span>
+                  <span class="enemy-pts neon-cyan">+100 PTS</span>
+                </div>
+                <div class="enemy-tags">
+                  <span class="tag">1 HP</span>
+                  <span class="tag">NORMAL SPEED</span>
+                  <span class="tag">STEALTH INTERCEPTOR</span>
+                </div>
+                <p class="enemy-desc">
+                  <strong>Appearance:</strong> Faceted aerodynamic stealth fuselage, glowing red canopy visor, swept delta wings, and wingroot blaster diodes.<br>
+                  <strong>Combat Intel:</strong> Patrol craft forming the backbone of enemy swarms. Tracks player flight path with coordinated banking rolls.
+                </p>
+              </div>
+
+              <!-- Sector Dreadnought (Boss) -->
+              <div class="enemy-card boss">
+                <div class="enemy-card-header">
+                  <span class="enemy-icon">☠️</span>
+                  <span class="enemy-name">LEVIATHAN MOTHERSHIP</span>
+                  <span class="enemy-pts neon-pink">+2000 PTS</span>
+                </div>
+                <div class="enemy-tags">
+                  <span class="tag danger">20+ HP</span>
+                  <span class="tag danger">5-LASER SPREAD</span>
+                  <span class="tag danger">TURBO CHARGE</span>
+                  <span class="tag">WAVES 5, 10, 15...</span>
+                </div>
+                <p class="enemy-desc">
+                  <strong>Appearance:</strong> Colossal tiered citadel, 20-unit armor wings with 5 heavy laser turrets, rotating ion sail ring, and sub-light engines.<br>
+                  <strong>Combat Intel:</strong> Fires 5-bolt laser spread arcs and initiates 1-second high-speed turbo ramming dashes every 6 seconds!
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab 2: Power-Ups Intel -->
+          <div class="intel-tab-content" id="tabPowerUps">
+            <div class="powerups-guide-grid">
+              <div class="powerup-legend-item">
+                <span class="legend-badge shield">🛡️</span>
+                <div class="legend-info">
+                  <strong>Shield Bubble (Cyan Icosahedron)</strong>
+                  <div>Grants 5 seconds of total invulnerability with a dual-layered rotating kinetic energy sphere.</div>
+                </div>
+              </div>
+              <div class="powerup-legend-item">
+                <span class="legend-badge rapid">⚡</span>
+                <div class="legend-info">
+                  <strong>Rapid Fire (Amber Pyramid)</strong>
+                  <div>Reduces blaster delay to 0.08s for 8 seconds, firing blazing golden plasma bolts with enhanced engine flares.</div>
+                </div>
+              </div>
+              <div class="powerup-legend-item">
+                <span class="legend-badge multiplier">💎</span>
+                <div class="legend-info">
+                  <strong>2X Multiplier (Purple Diamond)</strong>
+                  <div>Doubles all points earned (enemy kills, survival bonuses, boss rewards) for 10 seconds.</div>
+                </div>
+              </div>
+              <div class="powerup-legend-item">
+                <span class="legend-badge repair">💚</span>
+                <div class="legend-info">
+                  <strong>Hull Repair (Green Cross)</strong>
+                  <div>Instantly restores +1 Shield integrity segment (up to maximum 5).</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab 3: Controls Guide -->
+          <div class="intel-tab-content" id="tabControls">
+            <div class="controls-guide-grid">
+              <div class="guide-item">
+                <div class="guide-key">🖱️ MOUSE / TOUCH JOYSTICK</div>
+                <div class="guide-desc">Full 3D Flight Steering (Pitch, Yaw, and dynamic banking rolls into turns)</div>
+              </div>
+              <div class="guide-item">
+                <div class="guide-key">⚡ LEFT CLICK / SPACE / TAP</div>
+                <div class="guide-desc">Twin Wing-Mounted Plasma Cannons (Hold down for continuous auto-firing)</div>
+              </div>
+              <div class="guide-item">
+                <div class="guide-key">⏸️ ESC / P</div>
+                <div class="guide-desc">Tactical Pause, Audio Sliders & In-Game Manual</div>
+              </div>
+              <div class="guide-item">
+                <div class="guide-key">🔊 M</div>
+                <div class="guide-desc">Toggle Audio Frequencies Mute (Music & SFX)</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="menu-stats">
+          <div class="stat-box">
+            <span class="stat-label">RECORD HIGH SCORE</span>
+            <span class="stat-val neon-cyan" id="startHighScore">000000</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">MAX WAVE REACHED</span>
+            <span class="stat-val neon-pink" id="startMaxWave">01</span>
+          </div>
+        </div>
+
+        <div class="menu-buttons">
+          <button id="btnStartGame" class="btn-primary">
+            <span class="btn-text">LAUNCH MISSION</span>
+            <span class="btn-glow"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pause Menu Screen with Audio & Settings -->
+    <div id="pauseScreen" class="menu-overlay hidden">
+      <div class="menu-card glass-panel pause-card">
+        <div class="pause-header">
+          <div class="pause-tag">SYSTEM SUSPENDED</div>
+          <h2 class="menu-title">TACTICAL PAUSE</h2>
+        </div>
+        <div class="pause-stats">
+          <div>CURRENT SCORE: <span class="neon-cyan" id="pauseScore">0</span></div>
+          <div>CURRENT WAVE: <span class="neon-pink" id="pauseWave">1</span></div>
+        </div>
+
+        <!-- Audio Settings Controls in Pause Menu -->
+        <div class="audio-settings-panel">
+          <div class="settings-title">AUDIO FREQUENCIES</div>
+          <div class="setting-row">
+            <label for="musicVolSlider">SYNTHWAVE MUSIC</label>
+            <div class="slider-group">
+              <input type="range" id="musicVolSlider" min="0" max="1" step="0.05" value="0.6">
+              <span id="musicVolText" class="vol-text">60%</span>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label for="sfxVolSlider">COMBAT SOUND FX</label>
+            <div class="slider-group">
+              <input type="range" id="sfxVolSlider" min="0" max="1" step="0.05" value="0.8">
+              <span id="sfxVolText" class="vol-text">80%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick In-Game Threat Intel Accordion in Pause Menu -->
+        <div class="pause-intel-panel">
+          <div class="settings-title">QUICK INTEL & CONTROLS</div>
+          <div class="pause-intel-list">
+            <div class="pause-intel-row"><span>🔴 VIPER (SCOUT)</span> <span class="neon-cyan">2X SPEED / 1 HP</span></div>
+            <div class="pause-intel-row"><span>🟠 GOLIATH (TANK)</span> <span class="neon-amber">3 HP / 2 RAM DMG</span></div>
+            <div class="pause-intel-row"><span>🟣 SPECTER (SHOOTER)</span> <span class="neon-pink">2 HP / RED LASERS</span></div>
+            <div class="pause-intel-row"><span>🔺 CRIMSON (INTERCEPTOR)</span> <span class="neon-cyan">1 HP / STANDARD</span></div>
+            <div class="pause-intel-row"><span>☠️ LEVIATHAN (BOSS)</span> <span class="neon-pink">20+ HP / 5-SPREAD</span></div>
+          </div>
+        </div>
+
+        <div class="menu-buttons">
+          <button id="btnResumeGame" class="btn-primary">
+            <span class="btn-text">RESUME MISSION</span>
+          </button>
+          <button id="btnRestartFromPause" class="btn-secondary">
+            <span class="btn-text">RESTART MISSION</span>
+          </button>
+          <button id="btnMenuFromPause" class="btn-secondary">
+            <span class="btn-text">ABORT TO MAIN MENU</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Game Over Screen with Expanded Lifetime Statistics -->
+    <div id="gameOverScreen" class="menu-overlay hidden">
+      <div class="menu-card glass-panel game-over-card">
+        <div class="game-over-header">
+          <div class="alert-tag">HULL CRITICAL DESTABILIZATION</div>
+          <h2 class="game-over-title">MISSION FAILED</h2>
+          <div id="newHighScoreBadge" class="new-highscore-badge hidden">✨ NEW RECORD HIGH SCORE! ✨</div>
+        </div>
+
+        <div class="score-summary-grid">
+          <div class="summary-item">
+            <div class="summary-label">MISSION SCORE</div>
+            <div class="summary-value neon-cyan" id="finalScore">000000</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-label">RECORD HIGH</div>
+            <div class="summary-value neon-pink" id="finalHighScore">000000</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-label">SECTOR REACHED</div>
+            <div class="summary-value" id="finalWave">WAVE 1</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-label">ENEMIES DESTROYED</div>
+            <div class="summary-value" id="finalKills">0</div>
+          </div>
+        </div>
+
+        <!-- Lifetime Career Statistics Grid -->
+        <div class="career-stats-panel">
+          <div class="career-title">CAREER PILOT DOSSIER</div>
+          <div class="career-grid">
+            <div class="career-item">
+              <span class="career-label">LIFETIME SCORE</span>
+              <span class="career-val neon-cyan" id="lifetimeScore">0</span>
+            </div>
+            <div class="career-item">
+              <span class="career-label">TOTAL KILLS</span>
+              <span class="career-val neon-amber" id="lifetimeKills">0</span>
+            </div>
+            <div class="career-item">
+              <span class="career-label">BOSSES ANNIHILATED</span>
+              <span class="career-val neon-pink" id="lifetimeBosses">0</span>
+            </div>
+            <div class="career-item">
+              <span class="career-label">MISSIONS DEPLOYED</span>
+              <span class="career-val" id="lifetimeMissions">0</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="menu-buttons">
+          <button id="btnRestartGame" class="btn-primary">
+            <span class="btn-text">DEPLOY AGAIN</span>
+            <span class="btn-glow"></span>
+          </button>
+          <button id="btnMainMenu" class="btn-secondary">
+            <span class="btn-text">MAIN MENU</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Game Script -->
+  <script src="game.js"></script>
+</body>
+</html>

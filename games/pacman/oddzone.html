@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Pac-Man</title>
+<style>
+*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#050914;color:#fff;font:600 12px system-ui,sans-serif}body{display:grid;place-items:center}#board{width:min(100vw,150dvh);aspect-ratio:3/2;position:relative}#canvas{width:100%;height:100%;display:block;touch-action:none}.controls{position:fixed;right:10px;bottom:12px;display:grid;grid-template-columns:repeat(3,44px);gap:5px}.controls button{height:40px;border:1px solid #576a85;border-radius:7px;background:#162135;color:#fff;font-size:16px}.controls [data-dir=up]{grid-column:2}.controls [data-dir=left]{grid-column:1;grid-row:2}.controls [data-dir=down]{grid-column:2;grid-row:2}.controls [data-dir=right]{grid-column:3;grid-row:2}
+</style>
+</head>
+<body>
+<div id="board"><canvas id="canvas" width="960" height="640" aria-label="Pac-Man game"></canvas></div>
+<div class="controls" aria-label="Pac-Man controls"><button data-dir="up" aria-label="Up">&#8593;</button><button data-dir="left" aria-label="Left">&#8592;</button><button data-dir="down" aria-label="Down">&#8595;</button><button data-dir="right" aria-label="Right">&#8594;</button></div>
+<script src="static/script/game.js"></script>
+<script src="static/script/index.js"></script>
+<script>
+document.querySelectorAll('[data-dir]').forEach(button=>button.addEventListener('click',()=>{const codes={up:38,down:40,left:37,right:39};document.dispatchEvent(new KeyboardEvent('keydown',{keyCode:codes[button.dataset.dir],which:codes[button.dataset.dir],bubbles:true}))}));
+
+window.__oddzoneReadScore = () => typeof _SCORE !== 'undefined' ? _SCORE : 0;
+window.__oddzoneIsOver = () => typeof _LIFE !== 'undefined' && _LIFE <= 0;
+
+let pacmanReportedOver = false;
+setInterval(() => {
+    if (!pacmanReportedOver && typeof _LIFE !== 'undefined' && _LIFE <= 0) {
+        pacmanReportedOver = true;
+        try {
+            parent.postMessage({ type: 'oddzone:game-complete', score: typeof _SCORE !== 'undefined' ? _SCORE : 0 }, '*');
+        } catch(e) {}
+    }
+}, 200);
+</script>
+</body>
+</html>
