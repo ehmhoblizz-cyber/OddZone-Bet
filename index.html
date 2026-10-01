@@ -825,6 +825,62 @@
             </div>
         </div>
 
+        <!-- DETAILED MATCH RESULT MODAL -->
+        <div id="match-result-modal" class="absolute inset-0 bg-darkBg/95 backdrop-blur-md z-50 flex flex-col items-center justify-center p-6 hidden">
+            <div class="w-full max-w-sm rounded-3xl border border-white/10 bg-cardBg overflow-hidden shadow-2xl relative">
+                <button type="button" onclick="closeMatchResultModal()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition z-10">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+                
+                <div id="mr-header-bg" class="pt-8 pb-10 px-6 text-center relative overflow-hidden bg-gradient-to-br from-slate-800 to-slate-900">
+                    <div id="mr-outcome-icon" class="w-20 h-20 mx-auto rounded-full bg-black/40 border-4 border-slate-700 flex items-center justify-center mb-4 shadow-xl z-10 relative">
+                        <i class="fa-solid fa-minus text-3xl text-slate-400"></i>
+                    </div>
+                    <h2 id="mr-outcome-title" class="text-2xl font-black text-white uppercase tracking-wider relative z-10">Match Result</h2>
+                    <p id="mr-outcome-amount" class="text-lg font-bold text-slate-400 mt-1 relative z-10">₦0</p>
+                </div>
+
+                <div class="px-6 py-6 space-y-5">
+                    <div class="flex items-center justify-between">
+                        <div class="flex flex-col items-center flex-1">
+                            <div class="w-12 h-12 rounded-2xl bg-black border-2 border-white/20 overflow-hidden mb-2 bg-cover bg-center" id="mr-user-avatar"></div>
+                            <span class="text-xs font-bold text-slate-300 truncate w-full text-center">You</span>
+                            <span id="mr-user-score" class="text-lg font-mono font-black text-white mt-1">0</span>
+                        </div>
+                        
+                        <div class="px-3">
+                            <div class="w-8 h-8 rounded-full bg-black/50 border border-white/10 flex items-center justify-center">
+                                <span class="text-[10px] font-black text-slate-500">VS</span>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col items-center flex-1">
+                            <div class="w-12 h-12 rounded-2xl bg-black border-2 border-white/20 overflow-hidden mb-2 bg-cover bg-center" id="mr-opp-avatar">
+                                <div class="w-full h-full flex items-center justify-center bg-slate-800 text-slate-500"><i class="fa-solid fa-user"></i></div>
+                            </div>
+                            <span id="mr-opp-name" class="text-xs font-bold text-slate-300 truncate w-full text-center">Opponent</span>
+                            <span id="mr-opp-score" class="text-lg font-mono font-black text-white mt-1">0</span>
+                        </div>
+                    </div>
+
+                    <div class="rounded-xl bg-black/30 p-3 border border-white/5 text-center">
+                        <span class="text-[10px] uppercase tracking-widest text-slate-500 block mb-1">Game Played</span>
+                        <span id="mr-game-title" class="text-sm font-bold text-amber-300">Arcade Game</span>
+                    </div>
+
+                    <div class="pt-2">
+                        <button type="button" id="mr-rematch-btn" class="w-full py-3.5 rounded-xl text-[#1a0e00] font-black text-xs uppercase tracking-wider transition hover:brightness-110 flex items-center justify-center gap-2 shadow-lg mb-3">
+                            <i class="fa-solid fa-rotate-right"></i>
+                            <span>Stake Again (₦<span id="mr-rematch-amount">1,000</span>)</span>
+                        </button>
+                        <button type="button" onclick="closeMatchResultModal()" class="w-full py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl text-xs font-bold transition">
+                            Back to Lobby
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- GAME ARENA IFRAME MODAL -->
         <div id="game-arena-modal" class="absolute inset-0 bg-darkBg z-50 flex flex-col hidden">
             <div class="bg-cardBg px-4 py-3 border-b border-white/10 flex justify-between items-center shrink-0">
@@ -1596,7 +1652,8 @@
             { id: 'memory-match', title: 'Memory Match', category: 'Card memory', group: 'puzzle', icon: 'fa-clone', tone: 'text-pink-300', art: 'bg-rose-950', path: 'games/standalone/memory-match.html' },
             { id: 'neon-serpent', title: 'Neon Serpent', category: 'Snake arcade', group: 'arcade', icon: 'fa-staff-snake', tone: 'text-lime-300', art: 'bg-green-950', path: 'games/neon-serpent/oddzone.html' },
             { id: 'hextris', title: 'Hextris', category: 'Puzzle hex', group: 'puzzle', icon: 'fa-cubes', tone: 'text-fuchsia-300', art: 'bg-purple-950', path: 'games/hextris/index.html' },
-            { id: 'piano-tiles', title: 'Piano Tiles', category: 'Music rhythm', group: 'arcade', icon: 'fa-music', tone: 'text-white', art: 'bg-neutral-900', path: 'games/standalone/piano-tiles.html' }
+            { id: 'piano-tiles', title: 'Piano Tiles', category: 'Music rhythm', group: 'arcade', icon: 'fa-music', tone: 'text-white', art: 'bg-neutral-900', path: 'games/standalone/piano-tiles.html' },
+            { id: 'block-blast', title: 'Block Blast', category: 'Block puzzle', group: 'puzzle', icon: 'fa-cubes', tone: 'text-blue-300', art: 'bg-blue-900', path: 'games/standalone/block_blast/index.html' }
         ];
 
         // ── Cross-module bridge ──────────────────────────────────────────────
@@ -1742,7 +1799,7 @@
             grid.replaceChildren();
             // Exactly the 4 requested popular games:
             // 1- cave runner 3D, 2- pipe hopper, 3- block blast, 4- breakout
-            const popularGameIds = ['cave-runner', 'pipe-hopper', 'hextris', 'breakout'];
+            const popularGameIds = ['cave-runner', 'pipe-hopper', 'block-blast', 'breakout'];
             const popularList = popularGameIds.map(id => GAME_CATALOG.find(g => g.id === id)).filter(Boolean);
             popularList.forEach(game => {
                 const card = document.createElement('button');
@@ -3637,12 +3694,18 @@
                 setKycMsg('⚠️ We could not reach the bank verification service right now. Your details have not been saved — please try again in a few minutes.', true);
                 return;
             } else if (lookup && lookup.reason === 'rejected') {
-                if (submitBtn) {
-                    submitBtn.disabled = false;
-                    submitBtn.innerHTML = '<i class="fa-solid fa-shield-halved text-xs"></i><span>VERIFY REAL IDENTITY</span>';
+                const bName = bankName.toLowerCase();
+                if (bName.includes('opay') || bName.includes('palmpay') || bName.includes('moniepoint') || bName.includes('kuda')) {
+                    console.warn(`[OddZone] Overriding Paystack rejection for ${bankName} due to API unreliability.`);
+                    // Let it pass through to the fallback logic below
+                } else {
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = '<i class="fa-solid fa-shield-halved text-xs"></i><span>VERIFY REAL IDENTITY</span>';
+                    }
+                    setKycMsg(`❌ ${lookup.message || `Could not resolve that account at ${bankName}.`}`, true);
+                    return;
                 }
-                setKycMsg(`❌ ${lookup.message || `Could not resolve that account at ${bankName}.`}`, true);
-                return;
             }
             // reason === 'quota' or no result: the number passed the NUBAN checksum
             // but the name provider did not answer. Allow registration so a
@@ -4012,7 +4075,7 @@
             client.from('stake_challenges')
                 .select('*')
                 .eq('user_id', activeUser.id)
-                .in('status', ['playing', 'queued', 'matched'])
+                .in('status', ['playing', 'queued', 'matched', 'completed'])
                 .order('created_at', { ascending: false })
                 .limit(5)
                 .then(({ data }) => {
@@ -4021,14 +4084,180 @@
                         return;
                     }
                     container.innerHTML = data.map(ch => {
-                        const statusColor = ch.status === 'queued' ? 'text-amber-300' : ch.status === 'matched' ? 'text-accentGreen' : 'text-slate-400';
-                        return `<div class="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-cardBg px-4 py-3">
-                            <div class="min-w-0"><p class="truncate text-xs font-bold">${ch.game_id}</p><p class="mt-0.5 text-[10px] text-slate-400">₦${Number(ch.stake).toLocaleString()} stake</p></div>
-                            <span class="shrink-0 text-[10px] font-bold ${statusColor}">${ch.status.toUpperCase()}</span>
+                        let displayStatus = ch.status.toUpperCase();
+                        let statusColor = 'text-slate-400';
+                        if (ch.status === 'queued') {
+                            statusColor = 'text-amber-300';
+                        } else if (ch.status === 'playing') {
+                            statusColor = 'text-cyan-400';
+                        } else if (ch.status === 'matched' || ch.status === 'completed') {
+                            if (ch.winner_id === activeUser.id) {
+                                displayStatus = 'WON';
+                                statusColor = 'text-accentGreen';
+                            } else if (ch.winner_id && ch.winner_id !== activeUser.id) {
+                                displayStatus = 'LOST';
+                                statusColor = 'text-rose-500';
+                            } else {
+                                displayStatus = 'TIE';
+                                statusColor = 'text-slate-300';
+                            }
+                        }
+                        
+                        const gameTitle = GAME_CATALOG.find(g => g.id === ch.game_id)?.title || ch.game_id;
+                        const encoded = btoa(encodeURIComponent(JSON.stringify(ch)));
+                        
+                        return `<div onclick="showMatchResultFromStr('${encoded}')" class="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-cardBg px-4 py-3 cursor-pointer hover:bg-white/5 transition">
+                            <div class="min-w-0"><p class="truncate text-xs font-bold">${gameTitle}</p><p class="mt-0.5 text-[10px] text-slate-400">₦${Number(ch.stake).toLocaleString()} stake</p></div>
+                            <span class="shrink-0 text-[10px] font-bold ${statusColor}">${displayStatus}</span>
                         </div>`;
                     }).join('');
                 })
                 .catch(() => { container.innerHTML = ''; });
+        }
+
+        async function showMatchResultFromStr(encoded) {
+            try {
+                const ch = JSON.parse(decodeURIComponent(atob(encoded)));
+                
+                // Only show detailed result modal for resolved matches
+                if (ch.status !== 'matched' && ch.status !== 'completed') {
+                    // For queued/playing matches, maybe just show a toast or the matchmaking modal
+                    if (ch.status === 'queued') {
+                        // Reshow matchmaking modal
+                        activeStakeChallenge = ch;
+                        const mm = document.getElementById('matchmaking-modal');
+                        if (mm) mm.classList.remove('hidden');
+                        document.getElementById('matchmaking-status-title').textContent = 'Searching for Opponent…';
+                        document.getElementById('matchmaking-status-sub').textContent = `Looking for another player at ₦${Number(ch.stake).toLocaleString()}…`;
+                        document.getElementById('matchmaking-score-breakdown').classList.add('hidden');
+                        document.getElementById('matchmaking-cancel-btn').classList.remove('hidden');
+                    }
+                    return;
+                }
+
+                // It's a resolved match. Fetch opponent profile if possible
+                let oppName = 'Opponent';
+                let oppAvatar = '';
+                let oppScore = ch.opponent_score || 0;
+                
+                // Determine our score
+                let myScore = ch.score || 0;
+
+                const client = getSupabaseAuthClient();
+                if (client && ch.opponent_id) {
+                    const { data: oppData } = await client.from('profiles').select('name, avatar_url, username').eq('id', ch.opponent_id).single();
+                    if (oppData) {
+                        oppName = oppData.name || oppData.username || 'Player';
+                        oppAvatar = oppData.avatar_url || '';
+                    }
+                }
+
+                showMatchResultModal({
+                    gameId: ch.game_id,
+                    stake: ch.stake,
+                    payout: ch.payout || Math.floor(ch.stake * 1.8),
+                    myScore: myScore,
+                    oppScore: oppScore,
+                    oppName: oppName,
+                    oppAvatar: oppAvatar,
+                    winnerId: ch.winner_id
+                });
+            } catch (e) {
+                console.error("Error opening match result:", e);
+            }
+        }
+
+        function showMatchResultModal(data) {
+            const modal = document.getElementById('match-result-modal');
+            if (!modal) return;
+            
+            const isWin = data.winnerId === activeUser.id;
+            const isTie = !data.winnerId;
+            const isLoss = !isWin && !isTie;
+
+            const headerBg = document.getElementById('mr-header-bg');
+            const outcomeIcon = document.getElementById('mr-outcome-icon');
+            const outcomeTitle = document.getElementById('mr-outcome-title');
+            const outcomeAmount = document.getElementById('mr-outcome-amount');
+            
+            // Set styles based on outcome
+            if (isWin) {
+                headerBg.className = 'pt-8 pb-10 px-6 text-center relative overflow-hidden bg-gradient-to-br from-emerald-900 to-emerald-950';
+                outcomeIcon.className = 'w-20 h-20 mx-auto rounded-full bg-emerald-500/20 border-4 border-emerald-500 flex items-center justify-center mb-4 shadow-xl shadow-emerald-500/20 z-10 relative';
+                outcomeIcon.innerHTML = '<i class="fa-solid fa-trophy text-3xl text-emerald-400"></i>';
+                outcomeTitle.textContent = 'Victory';
+                outcomeTitle.className = 'text-2xl font-black text-white uppercase tracking-wider relative z-10';
+                outcomeAmount.textContent = `+₦${Number(data.payout).toLocaleString()}`;
+                outcomeAmount.className = 'text-lg font-bold text-emerald-400 mt-1 relative z-10';
+            } else if (isLoss) {
+                headerBg.className = 'pt-8 pb-10 px-6 text-center relative overflow-hidden bg-gradient-to-br from-rose-900 to-rose-950';
+                outcomeIcon.className = 'w-20 h-20 mx-auto rounded-full bg-rose-500/20 border-4 border-rose-500 flex items-center justify-center mb-4 shadow-xl shadow-rose-500/20 z-10 relative';
+                outcomeIcon.innerHTML = '<i class="fa-solid fa-skull text-3xl text-rose-400"></i>';
+                outcomeTitle.textContent = 'Defeat';
+                outcomeTitle.className = 'text-2xl font-black text-white uppercase tracking-wider relative z-10';
+                outcomeAmount.textContent = `-₦${Number(data.stake).toLocaleString()}`;
+                outcomeAmount.className = 'text-lg font-bold text-rose-400 mt-1 relative z-10';
+            } else {
+                headerBg.className = 'pt-8 pb-10 px-6 text-center relative overflow-hidden bg-gradient-to-br from-slate-800 to-slate-900';
+                outcomeIcon.className = 'w-20 h-20 mx-auto rounded-full bg-slate-500/20 border-4 border-slate-600 flex items-center justify-center mb-4 shadow-xl z-10 relative';
+                outcomeIcon.innerHTML = '<i class="fa-solid fa-handshake text-3xl text-slate-400"></i>';
+                outcomeTitle.textContent = 'Draw';
+                outcomeTitle.className = 'text-2xl font-black text-white uppercase tracking-wider relative z-10';
+                outcomeAmount.textContent = `Refunded`;
+                outcomeAmount.className = 'text-lg font-bold text-slate-400 mt-1 relative z-10';
+            }
+
+            // Set scores & players
+            document.getElementById('mr-user-score').textContent = Number(data.myScore).toLocaleString();
+            document.getElementById('mr-opp-score').textContent = Number(data.oppScore).toLocaleString();
+            
+            const myAvatar = localStorage.getItem('oddzone-profile-photo') || activeUser.photo;
+            const userAvatarEl = document.getElementById('mr-user-avatar');
+            if (myAvatar) {
+                userAvatarEl.style.backgroundImage = `url('${myAvatar}')`;
+                userAvatarEl.innerHTML = '';
+            } else {
+                userAvatarEl.style.backgroundImage = 'none';
+                userAvatarEl.innerHTML = `<div class="w-full h-full flex items-center justify-center bg-slate-800 text-slate-500"><i class="fa-solid fa-user"></i></div>`;
+            }
+
+            const oppAvatarEl = document.getElementById('mr-opp-avatar');
+            document.getElementById('mr-opp-name').textContent = data.oppName;
+            if (data.oppAvatar) {
+                oppAvatarEl.style.backgroundImage = `url('${data.oppAvatar}')`;
+                oppAvatarEl.innerHTML = '';
+            } else {
+                oppAvatarEl.style.backgroundImage = 'none';
+                oppAvatarEl.innerHTML = `<div class="w-full h-full flex items-center justify-center bg-slate-800 text-slate-500"><i class="fa-solid fa-user"></i></div>`;
+            }
+
+            // Set game info
+            const gameTitle = GAME_CATALOG.find(g => g.id === data.gameId)?.title || data.gameId;
+            document.getElementById('mr-game-title').textContent = gameTitle;
+            document.getElementById('mr-rematch-amount').textContent = Number(data.stake).toLocaleString();
+
+            // Set up rematch button
+            const rematchBtn = document.getElementById('mr-rematch-btn');
+            rematchBtn.className = 'w-full py-3.5 rounded-xl text-[#1a0e00] font-black text-xs uppercase tracking-wider transition hover:brightness-110 flex items-center justify-center gap-2 shadow-lg mb-3 ' + 
+                (isWin ? 'bg-gradient-to-r from-emerald-400 to-teal-500 shadow-emerald-500/20' : 
+                 isLoss ? 'bg-gradient-to-r from-amber-400 to-orange-500 shadow-orange-500/20' : 
+                 'bg-gradient-to-r from-cyan-400 to-blue-500 shadow-cyan-500/20');
+            
+            rematchBtn.onclick = () => {
+                closeMatchResultModal();
+                selectedGameId = data.gameId;
+                selectedGameTitle = gameTitle;
+                selectedGameUrl = GAME_CATALOG.find(g => g.id === data.gameId)?.url || GAME_CATALOG.find(g => g.id === data.gameId)?.path;
+                selectedStakeAmount = data.stake;
+                startStakeChallenge();
+            };
+
+            modal.classList.remove('hidden');
+        }
+
+        function closeMatchResultModal() {
+            const modal = document.getElementById('match-result-modal');
+            if (modal) modal.classList.add('hidden');
         }
 
         function closeMatchmakingModal() {
@@ -4036,6 +4265,7 @@
         }
 
         function closeMatchmakingAndGoGames() {
+
             closeMatchmakingModal();
             switchTab('games');
         }
@@ -4547,32 +4777,33 @@
                     }
 
                     if (settled && settled.matched) {
-                        const oppScoreText = Number(settled.opponent_score || 0).toLocaleString();
-                        const oppLabel = document.getElementById('match-opponent-label');
-                        const oppScoreEl = document.getElementById('match-score-opponent');
-                        if (oppLabel) oppLabel.textContent = 'Opponent';
-                        if (oppScoreEl) oppScoreEl.textContent = oppScoreText;
-
-                        if (settled.is_tie) {
-                            if (titleEl) titleEl.textContent = "It's a Tie!";
-                            if (subEl) subEl.textContent = `Both scores were ${score.toLocaleString()} pts. Your ₦${challenge.stake.toLocaleString()} stake has been refunded.`;
-                        } else if (settled.won) {
-                            const won = Number(settled.payout || challenge.payout);
-                            if (titleEl) titleEl.textContent = '🏆 You Won!';
-                            if (subEl) subEl.textContent = `${score.toLocaleString()} pts vs ${oppScoreText} pts. ₦${won.toLocaleString()} added to your wallet!`;
-                        } else {
-                            if (titleEl) titleEl.textContent = 'You Lost This Round';
-                            if (subEl) subEl.textContent = `${score.toLocaleString()} pts vs ${oppScoreText} pts. Better luck next time!`;
+                        if (mm) mm.classList.add('hidden');
+                        
+                        let oppName = 'Opponent';
+                        let oppAvatar = '';
+                        if (settled.opponent_id) {
+                            try {
+                                const { data: oppData } = await client.from('profiles').select('name, avatar_url, username').eq('id', settled.opponent_id).single();
+                                if (oppData) {
+                                    oppName = oppData.name || oppData.username || 'Opponent';
+                                    oppAvatar = oppData.avatar_url || '';
+                                }
+                            } catch (e) {}
                         }
+                        
+                        showMatchResultModal({
+                            gameId: challenge.gameId,
+                            stake: challenge.stake,
+                            payout: challenge.payout,
+                            myScore: score,
+                            oppScore: settled.opponent_score || 0,
+                            oppName: oppName,
+                            oppAvatar: oppAvatar,
+                            winnerId: settled.is_tie ? null : (settled.won ? activeUser.id : (settled.opponent_id || 'opponent'))
+                        });
 
-                        if (homeBtn) homeBtn.classList.add('hidden');
-                        if (cancelBtn) cancelBtn.classList.add('hidden');
-                        if (playMoreBtn) playMoreBtn.classList.remove('hidden');
-                        if (doneBtn) doneBtn.classList.remove('hidden');
                         activeStakeChallenge = null;
-
                         // The server moved the money, so re-read the balance
-                        // instead of guessing at it in the browser.
                         await refreshWalletFromServer();
                     } else if (settled) {
                         // No opponent yet — stay queued and wait for realtime.
@@ -4609,18 +4840,11 @@
                     const hostScore = hostEntry.score;
                     const iWin = score > hostScore;
                     const isTie = score === hostScore;
-
-                    const oppLabel = document.getElementById('match-opponent-label');
-                    const oppScore = document.getElementById('match-score-opponent');
-                    if (oppLabel) oppLabel.textContent = ctx.challenge.hostName || 'Opponent';
-                    if (oppScore) oppScore.textContent = hostScore.toLocaleString();
                     localStorage.removeItem(hostKey);
 
                     if (isTie) {
                         userWalletBalance += ctx.stake; // Refund
                         updateWalletDisplay();
-                        if (titleEl) titleEl.textContent = "⚖️ It's a Tie!";
-                        if (subEl) subEl.textContent = `Both scored ${score.toLocaleString()} pts. Your ₦${ctx.stake.toLocaleString()} stake has been refunded.`;
                         addInAppNotification("It's a Tie!", `You and ${ctx.challenge.hostName} both scored ${score.toLocaleString()} pts. Stake refunded.`, 'info');
                     } else if (iWin) {
                         userWalletBalance += ctx.payout;
@@ -4628,23 +4852,23 @@
                         const txs = JSON.parse(localStorage.getItem(STORAGE_KEYS.transactions) || '[]');
                         txs.unshift({ title: `1v1 Win – ${ctx.challenge.gameTitle}`, type: 'deposit', amount: ctx.payout, detail: new Date().toLocaleString() });
                         localStorage.setItem(STORAGE_KEYS.transactions, JSON.stringify(txs.slice(0, 100)));
-                        if (titleEl) titleEl.textContent = '🏆 You Won!';
-                        if (subEl) subEl.textContent = `Your ${score.toLocaleString()} pts beat ${hostScore.toLocaleString()} pts. ₦${ctx.payout.toLocaleString()} added to wallet!`;
                         addInAppNotification('🏆 You Won the Duel!', `You beat ${ctx.challenge.hostName} ${score.toLocaleString()} vs ${hostScore.toLocaleString()} pts. ₦${ctx.payout.toLocaleString()} credited!`, 'win');
-                        // Show "Win More / Go to Home"
-                        if (homeBtn) { homeBtn.classList.remove('hidden'); homeBtn.textContent = 'Go to Home'; }
-                        if (playMoreBtn) { playMoreBtn.classList.remove('hidden'); playMoreBtn.textContent = '🎮 Win More'; }
-                        if (doneBtn) doneBtn.classList.add('hidden');
                     } else {
-                        if (titleEl) titleEl.textContent = '😔 You Lost This Round';
-                        if (subEl) subEl.textContent = `Your ${score.toLocaleString()} pts vs ${hostScore.toLocaleString()} pts. Don't give up!`;
                         addInAppNotification('Match Result', `You scored ${score.toLocaleString()} pts vs ${hostScore.toLocaleString()} pts. Better luck next time!`, 'info');
-                        // Show "Try Again / Go to Home"
-                        if (homeBtn) { homeBtn.classList.remove('hidden'); homeBtn.textContent = 'Go to Home'; }
-                        if (playMoreBtn) { playMoreBtn.classList.remove('hidden'); playMoreBtn.textContent = '🔄 Try Again'; }
-                        if (doneBtn) doneBtn.classList.add('hidden');
-                        if (cancelBtn) cancelBtn.classList.add('hidden');
                     }
+
+                    if (mm) mm.classList.add('hidden');
+                    showMatchResultModal({
+                        gameId: ctx.challenge.gameId,
+                        stake: ctx.stake,
+                        payout: ctx.payout,
+                        myScore: score,
+                        oppScore: hostScore,
+                        oppName: ctx.challenge.hostName || 'Opponent',
+                        oppAvatar: '', 
+                        winnerId: isTie ? null : (iWin ? activeUser.id : 'opponent')
+                    });
+
                     activeFeedDuelContext = null;
                 } else {
                     // Acceptor played first — store their score and show waiting
