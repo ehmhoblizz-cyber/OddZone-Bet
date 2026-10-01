@@ -22,6 +22,8 @@
     <script src="supabase-config.js"></script>
     <script type="module" src="supabaseClient.js"></script>
     <script type="module" src="matchmaking.js"></script>
+    <!-- Live community activity (Supabase Realtime) + pull-to-refresh controls -->
+    <script src="liveActivity.js" defer></script>
     <!-- Paystack Inline Popup SDK -->
     <script src="https://js.paystack.co/v1/inline.js"></script>
     <!-- EmailJS SDK for real OTP email delivery -->
@@ -82,6 +84,68 @@
         .app-row { border: 1px solid rgba(151, 112, 192, 0.2); background: #0b0813; border-radius: 15px; }
         .nav-item { min-width: 0; color: #858191; }
         .nav-item.is-active { color: #d775fa; }
+
+        /* ── Live community + refresh controls ───────────────────────────── */
+        /* The pull indicator is absolutely positioned over the scroll area and
+           is driven by transform in JS, so it never triggers layout. */
+        #pull-indicator {
+            position: absolute; top: 0; left: 50%; z-index: 30;
+            transform: translate(-50%, 0);
+            display: flex; align-items: center; gap: 0.4rem;
+            width: 2.25rem; height: 2.25rem;
+            margin-top: 0.35rem;
+            border-radius: 9999px;
+            background: #100c1b;
+            border: 1px solid rgba(0, 201, 167, 0.35);
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+            color: #00c9a7;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.18s ease, transform 0.18s ease;
+        }
+        #pull-indicator.is-active { opacity: 1; }
+        #pull-indicator .pull-arrow { display: inline-block; transition: transform 0.12s linear; }
+        #pull-indicator[data-state="loading"] { color: #d775fa; border-color: rgba(215, 117, 250, 0.45); }
+        #pull-indicator[data-state="loading"] .pull-arrow { animation: pullSpin 0.8s linear infinite; }
+        #pull-indicator[data-state="done"] { color: #00e676; border-color: rgba(0, 230, 118, 0.5); }
+        @keyframes pullSpin { to { transform: rotate(360deg); } }
+
+        .refresh-toast {
+            position: absolute; left: 50%; bottom: 5.5rem; z-index: 60;
+            transform: translate(-50%, 8px);
+            opacity: 0; pointer-events: none;
+            background: #100c1b; color: #e2e8f0;
+            border: 1px solid rgba(0, 201, 167, 0.3);
+            border-radius: 9999px;
+            padding: 0.45rem 0.9rem;
+            font-size: 0.7rem; font-weight: 700;
+            box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+        .refresh-toast.is-visible { opacity: 1; transform: translate(-50%, 0); }
+
+        .live-activity-banner {
+            position: absolute; top: 4.6rem; left: 50%; z-index: 55;
+            transform: translate(-50%, -10px);
+            opacity: 0; pointer-events: none;
+            display: flex; align-items: center; gap: 0.45rem;
+            background: linear-gradient(90deg, rgba(133, 41, 232, 0.95), rgba(217, 35, 131, 0.95));
+            color: #fff; border-radius: 9999px;
+            padding: 0.4rem 0.85rem;
+            font-size: 0.7rem; font-weight: 800;
+            box-shadow: 0 8px 24px rgba(179, 32, 195, 0.35);
+            transition: opacity 0.25s ease, transform 0.25s ease;
+        }
+        .live-activity-banner.is-visible { opacity: 1; transform: translate(-50%, 0); }
+
+        #btn-refresh.is-refreshing { color: #00c9a7; border-color: rgba(0, 201, 167, 0.4); }
+        #live-status-dot { transition: background-color 0.2s ease, box-shadow 0.2s ease; }
+        #live-status-dot.is-live {
+            background: #00e676;
+            box-shadow: 0 0 0 3px rgba(0, 230, 118, 0.18);
+        }
+        @media (prefers-reduced-motion: reduce) {
+            #pull-indicator, .refresh-toast, .live-activity-banner { transition: none; }
+        }
         @media (min-width: 640px) {
             body { background: radial-gradient(ellipse at 50% 10%, #1c1027 0, #090610 52%); }
             #app-container { border: 1px solid rgba(255,255,255,0.08); }
@@ -92,7 +156,7 @@
 
     <!-- True Phone-Sized Container -->
     <div id="app-container" class="w-full h-full sm:max-w-[414px] sm:max-h-[860px] sm:rounded-[36px] bg-darkBg flex flex-col relative overflow-hidden shadow-2xl">
-        
+
         <!-- Top Status / Notch Area -->
         <div id="top-nav-bar" class="bg-[#100c1b]/95 backdrop-blur-md px-5 py-3 flex justify-between items-center z-35 shrink-0 border-b border-white/5 hidden">
             <div class="flex min-w-0 items-center gap-3">
@@ -103,6 +167,10 @@
                 </div>
             </div>
             <div class="flex items-center space-x-2">
+                <button type="button" id="btn-refresh" onclick="manualRefresh()" aria-label="Refresh balances, duels and feed" aria-busy="false" class="flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition">
+                    <i id="btn-refresh-icon" class="fa-solid fa-rotate text-xs" aria-hidden="true"></i>
+                </button>
+                <span id="live-status-dot" class="h-2 w-2 rounded-full bg-slate-600" title="Connecting…" aria-hidden="true"></span>
                 <button type="button" id="btn-notifications" onclick="openNotificationsModal()" class="relative flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition" aria-label="Notifications">
                     <i class="fa-solid fa-bell text-xs"></i>
                     <span id="nav-notif-dot" class="absolute -top-1 -right-1 flex h-2.5 w-2.5">
@@ -118,6 +186,10 @@
 
         <!-- Scrollable Main Content Area -->
         <div id="main-scroll-area" class="flex-1 overflow-y-auto no-scrollbar pb-24">
+            <!-- Pull-to-refresh spinner. Hidden until the gesture is armed. -->
+            <div id="pull-indicator" data-state="" aria-hidden="true">
+                <i class="fa-solid fa-arrow-down pull-arrow text-xs"></i>
+            </div>
             
             <!-- VIEW 1: AUTHENTICATION SCREEN -->
             <div id="view-auth" class="p-6 flex min-h-full flex-col justify-center">
@@ -1550,8 +1622,18 @@
         // declared further down the file, and the resulting throw aborted
         // top-level execution, so every `const` after this point (including
         // GAME_PLAYER_BASES) silently never initialised.
-        window.refreshWalletFromServer = (...args) => refreshWalletFromServer(...args);
-        window.renderActiveChallenges = (...args) => renderActiveChallenges(...args);
+        //
+        // The forwarder must call the captured binding, NOT the bare name.
+        // `(...args) => refreshWalletFromServer(...args)` recurses forever:
+        // the identifier resolves through the window property that this very
+        // line defines, so the arrow calls itself until the stack overflows
+        // ("Maximum call stack size exceeded" in refreshWalletFromServer).
+        // Capturing the declaration in a const first pins the real function
+        // before the global is shadowed, so the call can no longer loop.
+        const __refreshWalletFromServer = refreshWalletFromServer;
+        const __renderActiveChallenges = renderActiveChallenges;
+        window.refreshWalletFromServer = (...args) => __refreshWalletFromServer(...args);
+        window.renderActiveChallenges = (...args) => __renderActiveChallenges(...args);
 
         function setGameFilter(group) {
             activeGameFilter = group;
@@ -2868,11 +2950,29 @@
             if (selectedView) selectedView.classList.remove('hidden');
             if (tabName === 'profile') renderProfileStats();
             if (tabName === 'games') renderGameCards();
+            if (tabName === 'wallet') {
+                renderWalletTransactions();
+                refreshWalletFromServer();
+            }
             if (tabName === 'home') {
                 renderHomePopularGames();
                 renderHomeFeed();
                 renderDashboardScores();
                 renderWithdrawalTicker();
+                renderActiveChallenges();
+            }
+
+            // Coming back to a screen should show current data, not whatever
+            // happened to be there when it was left. The live socket keeps
+            // things current while the screen is open; this closes the gap for
+            // anything that changed while the player was on another tab.
+            if (typeof fetchLiveFeed === 'function' && ['home', 'games', 'wallet'].includes(tabName)) {
+                fetchLiveFeed().then(() => {
+                    if (tabName === 'home' && typeof renderHomeFeed === 'function') renderHomeFeed();
+                }).catch(() => {});
+            }
+            if (typeof loadPendingBets === 'function' && ['home', 'games'].includes(tabName)) {
+                loadPendingBets();
             }
         }
 
@@ -5617,6 +5717,12 @@
             }
         ];
 
+        // liveActivity.js needs to tell the four seeded demo posts apart from
+        // real ones when it merges the server feed in, but `const` at the top
+        // level of this inline script is not visible on `window`. Expose the
+        // ids explicitly rather than the whole array.
+        window.getSeededFeedPostIds = () => DEFAULT_SOCIAL_POSTS.map(p => p.id);
+
         function getSocialFeedPosts() {
             try {
                 const stored = JSON.parse(localStorage.getItem('oddzone-social-feed') || 'null');
@@ -5651,6 +5757,10 @@
                 const isMe = (post.author || '').toLowerCase() === (activeUser.name || '').toLowerCase();
                 const isFollowing = following.includes(post.author);
                 const authorInitial = (post.author || 'OZ').substring(0, 2).toUpperCase();
+                // A post can arrive via realtime at any moment, so the age is
+                // recomputed here rather than trusting the label it was stored
+                // with — otherwise a 5-minute-old post would read "Just now".
+                const timeLabel = feedTimeLabel(post.timestamp, post.timeLabel);
 
                 let attachmentHtml = '';
                 if (post.type === 'duel') {
@@ -5725,7 +5835,7 @@
                                         <span class="font-extrabold text-xs text-white truncate">${post.author}</span>
                                         <span class="px-1.5 py-0.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 text-[#1a0e00] text-[8px] font-black uppercase">LVL ${post.authorLevel || 1}</span>
                                     </div>
-                                    <p class="text-[9px] text-slate-400">${post.authorTitle || 'Duelist'} · ${post.timeLabel || 'Recent'}</p>
+                                    <p class="text-[9px] text-slate-400">${post.authorTitle || 'Duelist'} · ${timeLabel}</p>
                                 </div>
                             </div>
                             <div class="flex items-center gap-1.5">
@@ -5764,6 +5874,8 @@
             const posts = getSocialFeedPosts();
             const filtered = posts.filter(p => p.id !== postId);
             saveSocialFeedPosts(filtered);
+            // Remove it for every other account too, not just this device.
+            if (typeof deleteRemoteFeedPost === 'function') deleteRemoteFeedPost(postId);
             addInAppNotification('Challenge Cancelled', 'Your 1v1 challenge post has been removed.', 'info');
             renderHomeFeed();
         }
@@ -5773,10 +5885,22 @@
             const posts = getSocialFeedPosts();
             const filtered = posts.filter(p => p.id !== postId);
             saveSocialFeedPosts(filtered);
+            if (typeof deleteRemoteFeedPost === 'function') deleteRemoteFeedPost(postId);
             renderHomeFeed();
         }
 
 
+
+        // Push a post to every other connected account. The local feed is
+        // updated first so the author sees it immediately, then the row is
+        // inserted and Supabase Realtime fans it out to everyone else.
+        function addPostToFeed(newPost) {
+            const posts = getSocialFeedPosts();
+            posts.unshift(newPost);
+            saveSocialFeedPosts(posts);
+            if (typeof broadcastFeedPost === 'function') broadcastFeedPost(newPost);
+            renderHomeFeed();
+        }
 
         function publishFeedPost() {
             const input = document.getElementById('feed-post-input');
@@ -5800,11 +5924,8 @@
                 timestamp: Date.now(),
                 timeLabel: 'Just now'
             };
-            const posts = getSocialFeedPosts();
-            posts.unshift(newPost);
-            saveSocialFeedPosts(posts);
+            addPostToFeed(newPost);
             if (input) input.value = '';
-            renderHomeFeed();
         }
 
         function quickShareFeedWin() {
@@ -5827,10 +5948,7 @@
                 timestamp: Date.now(),
                 timeLabel: 'Just now'
             };
-            const posts = getSocialFeedPosts();
-            posts.unshift(newPost);
-            saveSocialFeedPosts(posts);
-            renderHomeFeed();
+            addPostToFeed(newPost);
         }
 
         function postCustomChallengeToFeed() {
@@ -5853,12 +5971,9 @@
                 timestamp: Date.now(),
                 timeLabel: 'Just now'
             };
-            const posts = getSocialFeedPosts();
-            posts.unshift(newPost);
-            saveSocialFeedPosts(posts);
+            addPostToFeed(newPost);
             closeCreateChallengeModal();
             switchTab('home');
-            renderHomeFeed();
         }
 
         function likeFeedPost(postId) {
@@ -5868,6 +5983,9 @@
             post.likedByMe = !post.likedByMe;
             post.likes = Math.max(0, (post.likes || 0) + (post.likedByMe ? 1 : -1));
             saveSocialFeedPosts(posts);
+            // The count is server-authoritative, so every account ends up
+            // agreeing on it rather than each device counting for itself.
+            if (typeof syncFeedLike === 'function') syncFeedLike(postId);
             renderHomeFeed();
         }
 
