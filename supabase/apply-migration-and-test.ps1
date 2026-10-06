@@ -80,8 +80,36 @@ Write-Host ''
 Write-Step '1. pushing the migration'
 Write-Host '  host db.csrfrzzpduhhzldirdfi.supabase.co'
 
+# Record the highest version on disk BEFORE pushing.
+#
+# `supabase db push` decides what to run by comparing file VERSIONS (the numeric
+# filename prefix) against the versions recorded in
+# supabase_migrations.schema_migrations. It does NOT look at file contents. So
+# editing a migration that has already run changes nothing: the CLI sees a
+# version it already has, skips the file, prints nothing, and still exits 0. A
+# corrected migration therefore has to be renamed to a HIGHER version.
+#
+# This is not hypothetical: a corrected migration kept its original version, the
+# push printed "=== done ===" and exited 0, and the database silently kept
+# running the broken version for a whole cycle.
+$migrationDir = Join-Path $PSScriptRoot 'migrations'
+$latestOnDisk = Get-ChildItem $migrationDir -Filter '*.sql' |
+    Where-Object { $_.BaseName -match '^(\d{8,})_' } |
+    ForEach-Object { [int64]$Matches[1] } |
+    Sort-Object -Descending |
+    Select-Object -First 1
+
+if (-not $latestOnDisk) {
+    Write-Host ''
+    Write-Host '  MISSING: no versioned .sql migration found.' -ForegroundColor Red
+    exit 1
+}
+
+Write-Host "  newest migration version: $latestOnDisk"
+
 $dbUrl = "postgresql://postgres:$($env:SUPABASE_DB_PASSWORD)@db.csrfrzzpduhhzldirdfi.supabase.co:5432/postgres"
-Invoke-Cli db push --db-url $dbUrl
+$pushOutput = Invoke-Cli db push --db-url $dbUrl 2>&1 | Out-String
+Write-Host $pushOutput
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host ''
@@ -90,6 +118,28 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host '  Paste the error above and send it to me.'
     exit 1
 }
+
+# ── 1a. Confirm the push actually applied something ─────────────────────────
+
+# "db push" exiting 0 only means it did not error. It also exits 0 when there
+# was nothing to do, which in the output above is indistinguishable from a real
+# success. Assert against the CLI's own wording instead of trusting the exit
+# code, and fail loudly rather than letting a no-op pass as a success.
+if ($pushOutput -match 'No pending migrations|already applied|up to date') {
+    Write-Host ''
+    Write-Host '  NOTHING WAS APPLIED.' -ForegroundColor Red
+    Write-Host '  The CLI reports every migration on disk as already applied.'
+    Write-Host ''
+    Write-Host '  If you have just CORRECTED a migration file, that fix did NOT' -ForegroundColor Yellow
+    Write-Host '  run. Supabase tracks migrations by the numeric filename prefix,' -ForegroundColor Yellow
+    Write-Host '  not by file contents, so editing a file in place is a no-op.' -ForegroundColor Yellow
+    Write-Host ''
+    Write-Host "  Fix: rename it to a version HIGHER than $latestOnDisk," -ForegroundColor Yellow
+    Write-Host '  then run this script again.' -ForegroundColor Yellow
+    exit 1
+}
+
+Write-Host '  push reported migrations applied.' -ForegroundColor Green
 
 # ── 2. Run the duel test ─────────────────────────────────────────────────────
 

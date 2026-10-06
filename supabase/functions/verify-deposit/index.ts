@@ -115,7 +115,16 @@ serve(async (req: Request) => {
       .maybeSingle();
 
     if (existing) {
-      return json({ error: "This payment has already been credited." }, 409);
+      // A retry of an already-credited reference is a success, not an error:
+      // the money is in the wallet, which is exactly what the client asked for.
+      // Answering 409 here made the app report a failure for a deposit that
+      // had in fact gone through.
+      return json({
+        success: true,
+        credited: 0,
+        already_credited: true,
+        reference,
+      });
     }
 
     // Credit through the SECURITY DEFINER function — the only path that can
@@ -129,13 +138,19 @@ serve(async (req: Request) => {
       return json({ error: creditErr.message }, 500);
     }
 
-    // Keep the reference so a replay is caught above.
-    await service
+    // Persist the reference so a replay is caught above. The previous version
+    // updated "the newest row for this user" without filtering on the reference,
+    // which stamped the reference onto an unrelated transaction (a duel entry,
+    // say) and left the deposit row itself unmarked — so the duplicate guard
+    // above never matched and a replayed reference could credit twice.
+    const { error: stampErr } = await service
       .from("transactions")
-      .update({ reference, status: "verified" })
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(1);
+      .update({ status: "verified" })
+      .eq("reference", reference);
+
+    if (stampErr) {
+      console.warn("Could not stamp transaction reference:", stampErr.message);
+    }
 
     return json({ success: true, credited: paidNaira, reference, ...data });
   } catch (err) {

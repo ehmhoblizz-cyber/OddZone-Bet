@@ -323,9 +323,20 @@ const EXPECTED_RPCS = [
 
   console.log('\n=== 7. tie refunds both stakes in full ===');
   // A lost its stake in scenario 3, so fund it for exactly this stake.
-  check('A funded to 200', await setBalance(A.headers, 200));
-  const t1 = await rpc(A.headers, 'open_duel', { p_game_id: 'hextris', p_stake: 200, p_payout: 360 });
-  const t2 = await rpc(B.headers, 'open_duel', { p_game_id: 'hextris', p_stake: 200, p_payout: 360 });
+  //
+  // 500, not 200: open_duel() enforces a MEMBERSHIP test against the approved
+  // presets {100, 500, 1000, 2000, 5000} (20261001000000 section 6a). 200 is
+  // not one of them, so open_duel raised, t1.body.challenge_id was undefined,
+  // and the settle call went out carrying only {p_score: 777} -- which
+  // PostgREST reports as a missing p_challenge_id, i.e. "could not find the
+  // function". That cascade made a rejected stake look like a broken RPC
+  // signature for several rounds.
+  check('A funded to 500', await setBalance(A.headers, 500));
+  const t1 = await rpc(A.headers, 'open_duel', { p_game_id: 'hextris', p_stake: 500, p_payout: 900 });
+  const t2 = await rpc(B.headers, 'open_duel', { p_game_id: 'hextris', p_stake: 500, p_payout: 900 });
+  check('both hextris duels opened',
+    t1.status === 200 && t2.status === 200,
+    `t1 HTTP ${t1.status} ${JSON.stringify(t1.body).slice(0, 80)} | t2 HTTP ${t2.status} ${JSON.stringify(t2.body).slice(0, 80)}`);
   await rpc(A.headers, 'settle_duel', { p_challenge_id: t1.body?.challenge_id, p_score: 777 });
   const ts2 = await rpc(B.headers, 'settle_duel', { p_challenge_id: t2.body?.challenge_id, p_score: 777 });
   check('tie detected', ts2.body?.is_tie === true, JSON.stringify(ts2.body).slice(0, 140));
@@ -347,8 +358,8 @@ const EXPECTED_RPCS = [
       Number(tieMirror.creator_score) === 777 && Number(tieMirror.opponent_score) === 777,
       `creator=${tieMirror.creator_score} opponent=${tieMirror.opponent_score}`);
   }
-  check('A refunded to 200', (await balance(A.headers)) === 200, `got ${await balance(A.headers)}`);
-  // 1700, not 1800: B opened 200 (-> 1500) and the tie refunded it in full
+  check('A refunded to 500', (await balance(A.headers)) === 500, `got ${await balance(A.headers)}`);
+  // 1700, not 1800: B opened 500 (-> 1200) and the tie refunded it in full
   // (-> 1700). The 100 gap from step 6 is the cancellation fee, which is never
   // returned. See the note there.
   check('B refunded to 1700 (fee from step 6 not returned)', (await balance(B.headers)) === 1700, `got ${await balance(B.headers)}`);
@@ -361,10 +372,14 @@ const EXPECTED_RPCS = [
   // on a duel that is still waiting. Both were undefined, so a client calling
   // them got PGRST202. They are exercised here for real, because both move money.
   console.log('\n=== 8b. tie_duel refunds both stakes in full ===');
-  check('A funded to 300', await setBalance(A.headers, 300));
-  check('B funded to 300', await setBalance(B.headers, 300));
-  const td1 = await rpc(A.headers, 'open_duel', { p_game_id: 'snake', p_stake: 300, p_payout: 540 });
-  const td2 = await rpc(B.headers, 'open_duel', { p_game_id: 'snake', p_stake: 300, p_payout: 540 });
+  // Stake 500 and real game ids: open_duel() rejects any stake outside the
+  // approved presets {100, 500, 1000, 2000, 5000}, and any game_id outside the
+  // nine real ids. 'snake' and 'tetris' were both rejected, so this scenario
+  // silently skipped itself for as long as those values were here.
+  check('A funded to 500', await setBalance(A.headers, 500));
+  check('B funded to 500', await setBalance(B.headers, 500));
+  const td1 = await rpc(A.headers, 'open_duel', { p_game_id: 'pacman', p_stake: 500, p_payout: 900 });
+  const td2 = await rpc(B.headers, 'open_duel', { p_game_id: 'pacman', p_stake: 500, p_payout: 900 });
   const openedOk = td1.status === 200 && td2.status === 200;
   check('both duels opened', openedOk,
     `td1 HTTP ${td1.status} | td2 HTTP ${td2.status} ${JSON.stringify(td2.body).slice(0, 90)}`);
@@ -373,18 +388,23 @@ const EXPECTED_RPCS = [
     console.log('>>> so there is no challenge_id to tie.');
   } else {
     const tied = await rpc(A.headers, 'tie_duel', { p_challenge_id: td1.body.challenge_id });
-    check('tie accepted', tied.body?.is_tie === true, JSON.stringify(tied.body).slice(0, 130));
-    check('A refunded to 300', (await balance(A.headers)) === 300, `got ${await balance(A.headers)}`);
-    check('B refunded to 300', (await balance(B.headers)) === 300, `got ${await balance(B.headers)}`);
+    // The deployed tie_duel() does not return settle_duel's 'is_tie' key. It
+    // reports the draw as 'tie'/'tied' (with 'ok'/'matched'/'success' as the
+    // acceptance flags), so assert on what it actually returns.
+    check('tie accepted',
+      tied.body?.tie === true || tied.body?.tied === true || tied.body?.is_tie === true,
+      JSON.stringify(tied.body).slice(0, 130));
+    check('A refunded to 500', (await balance(A.headers)) === 500, `got ${await balance(A.headers)}`);
+    check('B refunded to 500', (await balance(B.headers)) === 500, `got ${await balance(B.headers)}`);
   }
 
   console.log('\n=== 8c. forfeit_duel pays the opponent, forfeiter gets nothing ===');
-  check('A funded to 300', await setBalance(A.headers, 300));
-  check('B funded to 300', await setBalance(B.headers, 300));
-  const fd1 = await rpc(A.headers, 'open_duel', { p_game_id: 'tetris', p_stake: 300, p_payout: 540 });
+  check('A funded to 500', await setBalance(A.headers, 500));
+  check('B funded to 500', await setBalance(B.headers, 500));
+  const fd1 = await rpc(A.headers, 'open_duel', { p_game_id: 'neon-serpent', p_stake: 500, p_payout: 900 });
   // Opened but never settled: forfeit_duel() pairs against any waiting
   // challenge of the same game and stake, so B's does not need to be settled.
-  const fd2 = await rpc(B.headers, 'open_duel', { p_game_id: 'tetris', p_stake: 300, p_payout: 540 });
+  const fd2 = await rpc(B.headers, 'open_duel', { p_game_id: 'neon-serpent', p_stake: 500, p_payout: 900 });
   const fOpenedOk = fd1.status === 200 && fd2.status === 200;
   check('both duels opened', fOpenedOk, `fd1 HTTP ${fd1.status} | fd2 HTTP ${fd2.status}`);
   if (!fOpenedOk) {
@@ -393,16 +413,25 @@ const EXPECTED_RPCS = [
     const ff = await rpc(A.headers, 'forfeit_duel', { p_challenge_id: fd1.body.challenge_id });
     check('forfeit accepted', ff.body?.forfeited === true, JSON.stringify(ff.body).slice(0, 130));
     check('A keeps nothing (forfeited the stake)', (await balance(A.headers)) === 0, `got ${await balance(A.headers)}`);
-    check('B won the payout 540', (await balance(B.headers)) === 540, `got ${await balance(B.headers)}`);
+    check('B won the payout 900', (await balance(B.headers)) === 900, `got ${await balance(B.headers)}`);
   }
 
   console.log('\n=== 9. different stakes do NOT match ===');
-  // B must be able to afford the 700 stake, otherwise open_duel raises
-  // "Insufficient balance" and this scenario silently tests nothing.
-  check('A funded to 300', await setBalance(A.headers, 300));
-  check('B funded to 700', await setBalance(B.headers, 700));
-  const d1 = await rpc(A.headers, 'open_duel', { p_game_id: 'piano-tiles', p_stake: 300, p_payout: 540 });
-  const d2 = await rpc(B.headers, 'open_duel', { p_game_id: 'piano-tiles', p_stake: 700, p_payout: 1260 });
+  // THIS IS THE REGRESSION TEST FOR THE STAKE-FILTER HOLE.
+  //
+  // The hand-patched settle_duel() that was live on production matched on
+  // opponent_id alone, so two players who staked DIFFERENT amounts were matched
+  // and settled against each other. 300 vs 700 returned matched=true. With the
+  // restored function the `and c.stake = mine.stake` predicate makes that
+  // impossible, so both rows must come back unmatched and each player keeps
+  // waiting.
+  //
+  // 500 and 1000 are the two cheapest DISTINCT approved presets, so the wallets
+  // only have to cover 500 each and the scenario stays cheap to run.
+  check('A funded to 500', await setBalance(A.headers, 500));
+  check('B funded to 1000', await setBalance(B.headers, 1000));
+  const d1 = await rpc(A.headers, 'open_duel', { p_game_id: 'piano-tiles', p_stake: 500, p_payout: 900 });
+  const d2 = await rpc(B.headers, 'open_duel', { p_game_id: 'piano-tiles', p_stake: 1000, p_payout: 1800 });
 
   // Assert both opens succeeded BEFORE settling either.
   //

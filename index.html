@@ -75,6 +75,16 @@
             100% { transform: rotate(360deg); }
         }
         .radar-line { animation: radarSweep 2s linear infinite; }
+        /* 5-10s duel search bar */
+        #matchmaking-search-fill { box-shadow: 0 0 12px rgba(45,212,191,.5); }
+        #matchmaking-search-fill::after {
+            content: ""; position: absolute; inset: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,.45), transparent);
+            animation: mmSearchShimmer 1.4s linear infinite;
+        }
+        @keyframes mmSearchShimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+        #matchmaking-opponent-card { animation: mmCardIn .35s ease-out; }
+        @keyframes mmCardIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
         #top-nav-bar { padding-top: max(0.75rem, env(safe-area-inset-top)); }
         #bottom-nav { padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); }
         .game-filter-chip.active { background: #7c4dff; color: #fff; border-color: transparent; }
@@ -94,8 +104,12 @@
            is driven by transform in JS, so it never triggers layout. */
         #pull-indicator {
             position: absolute; top: 0; left: 50%; z-index: 30;
-            transform: translate(-50%, 0);
-            display: flex; align-items: center; gap: 0.4rem;
+            /* Centred by margin, not by a transform: JS drives `transform` for
+               the drag, and having both would fight over the same property and
+               throw the spinner off-centre. */
+            margin-left: -1.125rem;
+            transform: translateY(0);
+            display: flex; align-items: center; justify-content: center;
             width: 2.25rem; height: 2.25rem;
             margin-top: 0.35rem;
             border-radius: 9999px;
@@ -104,13 +118,21 @@
             box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
             color: #00c9a7;
             opacity: 0; pointer-events: none;
-            transition: opacity 0.18s ease, transform 0.18s ease;
+            will-change: transform, opacity;
+            transition: opacity 0.18s ease;
         }
+        /* No transform transition while dragging: a transition here makes the
+           spinner lag a finger by a frame or two, which reads as jank. It is
+           re-added only for the release animation. */
+        #pull-indicator.is-settling { transition: opacity 0.18s ease, transform 0.22s cubic-bezier(0.22, 1, 0.36, 1); }
         #pull-indicator.is-active { opacity: 1; }
-        #pull-indicator .pull-arrow { display: inline-block; transition: transform 0.12s linear; }
+        #pull-indicator .pull-arrow { display: inline-block; }
+        #pull-indicator.is-dragging .pull-arrow { transition: none; }
         #pull-indicator[data-state="loading"] { color: #d775fa; border-color: rgba(215, 117, 250, 0.45); }
         #pull-indicator[data-state="loading"] .pull-arrow { animation: pullSpin 0.8s linear infinite; }
         #pull-indicator[data-state="done"] { color: #00e676; border-color: rgba(0, 230, 118, 0.5); }
+        /* Past the threshold: the cue switches from "keep pulling" to "let go". */
+        #pull-indicator[data-state="armed"] { color: #00e676; border-color: rgba(0, 230, 118, 0.55); box-shadow: 0 6px 22px rgba(0, 230, 118, 0.28); }
         @keyframes pullSpin { to { transform: rotate(360deg); } }
 
         .refresh-toast {
@@ -141,7 +163,7 @@
         }
         .live-activity-banner.is-visible { opacity: 1; transform: translate(-50%, 0); }
 
-        #btn-refresh.is-refreshing { color: #00c9a7; border-color: rgba(0, 201, 167, 0.4); }
+        /* #btn-refresh.is-refreshing was removed with the header reload button. */
         #live-status-dot { transition: background-color 0.2s ease, box-shadow 0.2s ease; }
         #live-status-dot.is-live {
             background: #00e676;
@@ -171,9 +193,10 @@
                 </div>
             </div>
             <div class="flex items-center space-x-2">
-                <button type="button" id="btn-refresh" onclick="manualRefresh()" aria-label="Refresh balances, duels and feed" aria-busy="false" class="flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition">
-                    <i id="btn-refresh-icon" class="fa-solid fa-rotate text-xs" aria-hidden="true"></i>
-                </button>
+                <!-- The reload button that used to sit here was removed: the
+                     header is the one place a user cannot reach with a thumb
+                     on a phone, and the pull-to-refresh gesture below now owns
+                     this job on the screens that have data to refresh. -->
                 <span id="live-status-dot" class="h-2 w-2 rounded-full bg-slate-600" title="Connecting…" aria-hidden="true"></span>
                 <button type="button" id="btn-notifications" onclick="openNotificationsModal()" class="relative flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition" aria-label="Notifications">
                     <i class="fa-solid fa-bell text-xs"></i>
@@ -731,7 +754,8 @@
 
                     <div>
                         <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Pick your stake (₦)</label>
-                        <div class="grid grid-cols-4 gap-2">
+                        <div class="grid grid-cols-5 gap-2">
+                            <button type="button" onclick="selectStakeAmount(100)" data-stake="100" class="stake-btn rounded-xl border border-white/10 bg-darkBg py-2 text-xs font-bold transition hover:border-amber-400">₦100</button>
                             <button type="button" onclick="selectStakeAmount(500)" data-stake="500" class="stake-btn rounded-xl border border-white/10 bg-darkBg py-2 text-xs font-bold transition hover:border-amber-400">₦500</button>
                             <button type="button" onclick="selectStakeAmount(1000)" data-stake="1000" class="stake-btn active rounded-xl border border-amber-400 bg-amber-400/20 py-2 text-xs font-bold text-amber-200 transition">₦1,000</button>
                             <button type="button" onclick="selectStakeAmount(2000)" data-stake="2000" class="stake-btn rounded-xl border border-white/10 bg-darkBg py-2 text-xs font-bold transition hover:border-amber-400">₦2,000</button>
@@ -739,7 +763,14 @@
                         </div>
                         <div class="mt-2 flex items-center gap-2">
                             <span class="text-[10px] text-slate-400">Custom: ₦</span>
-                            <input type="number" id="custom-stake-input" min="200" step="100" value="1000" oninput="onCustomStakeChange(this.value)" class="auth-input flex-1 border px-3 py-1.5 text-xs text-white">
+                            <input type="number" id="custom-stake-input" min="100" step="100" value="1000" list="stake-preset-options" oninput="onCustomStakeChange(this.value)" class="auth-input flex-1 border px-3 py-1.5 text-xs text-white">
+                            <datalist id="stake-preset-options">
+                                <option value="100"></option>
+                                <option value="500"></option>
+                                <option value="1000"></option>
+                                <option value="2000"></option>
+                                <option value="5000"></option>
+                            </datalist>
                         </div>
                     </div>
 
@@ -790,9 +821,31 @@
                 </div>
             </div>
 
+            <!-- Opponent profile card: fills in the moment a match is claimed -->
+            <div id="matchmaking-opponent-card" class="hidden w-full max-w-xs rounded-2xl border border-white/10 bg-cardBg p-3.5 mb-5 flex items-center gap-3 text-left">
+                <div id="matchmaking-opponent-avatar" class="w-12 h-12 rounded-full shrink-0 overflow-hidden bg-slate-800 border border-white/10 flex items-center justify-center">
+                    <i class="fa-solid fa-user text-slate-500"></i>
+                </div>
+                <div class="min-w-0 flex-1">
+                    <p class="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Opponent</p>
+                    <p id="matchmaking-opponent-name" class="text-sm font-extrabold text-white truncate">Waiting...</p>
+                    <p id="matchmaking-opponent-status" class="text-[10px] text-accentGreen font-bold">Ready</p>
+                </div>
+            </div>
+
+            <!-- 5-10 second search progress bar -->
+            <div id="matchmaking-search-bar" class="hidden w-full max-w-xs mb-6">
+                <div class="h-2 w-full rounded-full bg-white/10 overflow-hidden">
+                    <div id="matchmaking-search-fill" class="relative h-full w-0 overflow-hidden rounded-full bg-gradient-to-r from-cyan-400 to-accentGreen"></div>
+                </div>
+                <p class="mt-2 text-center text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                    If nobody joins, you play solo &mdash; your score still counts
+                </p>
+            </div>
+
             <div class="text-center max-w-xs space-y-2 mb-6">
                 <h3 class="font-extrabold text-xl" id="matchmaking-status-title">Searching for Opponent...</h3>
-                <p class="text-xs text-slate-300 leading-5" id="matchmaking-status-sub">Looking for a player who completed the challenge...</p>
+                <p class="text-xs text-slate-300 leading-5" id="matchmaking-status-sub">Looking for a player at the same game and stake...</p>
                 <div id="matchmaking-score-breakdown" class="hidden rounded-2xl border border-white/10 bg-cardBg p-4 space-y-3 mt-3">
                     <div class="grid grid-cols-2 gap-3 text-center">
                         <div class="rounded-xl bg-black/40 p-2.5">
@@ -1306,7 +1359,7 @@
                     <h4 class="font-bold text-white text-sm pt-1">How It Works:</h4>
                     <ul class="space-y-2 list-disc pl-4 text-slate-300">
                         <li><strong>Practice Runs:</strong> Play 2-minute timed runs completely free to sharpen your scores and climb the local leaderboard.</li>
-                        <li><strong>1v1 Stake Challenges:</strong> Stake Naira (₦500 – ₦10,000) on your favorite games. Play a 2-minute match and submit your best score.</li>
+                        <li><strong>1v1 Stake Challenges:</strong> Stake Naira (₦100 – ₦5,000) on your favorite games. Play a 2-minute match and submit your best score.</li>
                         <li><strong>Matchmaking:</strong> The platform matches you with an opponent who played at the same stake. The player with the highest score wins the pool (less 10% platform fee).</li>
                         <li><strong>Instant Deposits & Fast Payouts:</strong> Deposit seamlessly via Paystack. Withdraw directly to any verified Nigerian bank account.</li>
                         <li><strong>CBN Compliance & KYC:</strong> Strict Central Bank of Nigeria (CBN) NUBAN check digit algorithms and BVN/NIN identity resolution protect fair play and prevent fraud.</li>
@@ -1419,7 +1472,7 @@
                     <button type="button" onclick="closeSupportModal()" class="text-slate-400 hover:text-white" aria-label="Close support"><i class="fa-solid fa-xmark text-lg"></i></button>
                 </div>
                 <p class="text-xs text-slate-300 leading-5">Need help with deposits, bank name verification, challenges, or payouts? Our team is available 24/7 across multiple channels.</p>
-                
+
                 <div class="space-y-2.5">
                     <a href="https://wa.me/2348000000000?text=Hello%20OddZone%20Support,%20I%20need%20assistance%20with%20my%20account" target="_blank" rel="noopener noreferrer" class="app-row flex items-center justify-between p-3.5 hover:border-emerald-400/50 transition group">
                         <div class="flex items-center gap-3">
@@ -1480,7 +1533,7 @@
                     </div>
                     <button type="button" onclick="closeActivityDetailsModal()" class="text-slate-400 hover:text-white" aria-label="Close activities"><i class="fa-solid fa-xmark text-lg"></i></button>
                 </div>
-                
+
                 <!-- Filter Tabs -->
                 <div class="grid grid-cols-3 gap-1.5 p-1 rounded-2xl bg-black/40 border border-white/10">
                     <button type="button" id="act-tab-all" onclick="setActivityFilter('all')" class="py-2 rounded-xl text-xs font-bold transition bg-brandPurple text-white">All</button>
@@ -1653,7 +1706,8 @@
             { id: 'neon-serpent', title: 'Neon Serpent', category: 'Snake arcade', group: 'arcade', icon: 'fa-staff-snake', tone: 'text-lime-300', art: 'bg-green-950', path: 'games/neon-serpent/oddzone.html' },
             { id: 'hextris', title: 'Hextris', category: 'Puzzle hex', group: 'puzzle', icon: 'fa-cubes', tone: 'text-fuchsia-300', art: 'bg-purple-950', path: 'games/hextris/index.html' },
             { id: 'piano-tiles', title: 'Piano Tiles', category: 'Music rhythm', group: 'arcade', icon: 'fa-music', tone: 'text-white', art: 'bg-neutral-900', path: 'games/standalone/piano-tiles.html' },
-            { id: 'block-blast', title: 'Block Blast', category: 'Block puzzle', group: 'puzzle', icon: 'fa-cubes', tone: 'text-blue-300', art: 'bg-blue-900', path: 'games/standalone/block_blast/index.html' }
+            { id: 'block-blast', title: 'Block Blast', category: 'Block puzzle', group: 'puzzle', icon: 'fa-cubes', tone: 'text-blue-300', art: 'bg-blue-900', path: 'games/standalone/block_blast/index.html' },
+            { id: '8ball', title: '8-Ball Pool', category: 'Pool arcade', group: 'arcade', icon: 'fa-8-ball', tone: 'text-emerald-200', art: 'bg-emerald-950', path: 'games/standalone/8-ball-pool.html' }
         ];
 
         // ── Cross-module bridge ──────────────────────────────────────────────
@@ -1691,6 +1745,12 @@
         // ("Maximum call stack size exceeded" in refreshWalletFromServer).
         // Capturing the declaration in a const first pins the real function
         // before the global is shadowed, so the call can no longer loop.
+        // matchmaking.js delegates its realtime work to the duel channel
+        // defined further down, which owns the whole
+        // QUEUED -> MATCHED -> PLAYING -> WON/LOST/TIE flow. Plain assignment
+        // for the same reason as the two forwarders below.
+        window.subscribeDuelRealtime = subscribeDuelRealtime;
+
         const __refreshWalletFromServer = refreshWalletFromServer;
         const __renderActiveChallenges = renderActiveChallenges;
         window.refreshWalletFromServer = (...args) => __refreshWalletFromServer(...args);
@@ -1725,7 +1785,8 @@
             'memory-match': 980,
             'neon-serpent': 2890,
             'hextris': 2780,
-            'piano-tiles': 2310
+            'piano-tiles': 2310,
+            '8ball': 2540
         };
 
         function getGamePlayerCount(gameId) {
@@ -3075,44 +3136,129 @@
         // with a message safe to show the player. The balance is never changed
         // here — only verify-deposit (which checks the funds against Paystack)
         // is allowed to move money.
+        //
+        // Every failure is classified before it is shown. "Network error" used
+        // to be the answer for a wrong anon key, an undeployed function, an
+        // expired JWT and a dead connection alike, which made the message
+        // useless for both the player and whoever has to debug it.
+        const DEPOSIT_VERIFY_TIMEOUT_MS = 20000;
+
+        function depositVerifyError(message, code, status) {
+            const err = new Error(message);
+            err.code = code;
+            err.status = status || 0;
+            return err;
+        }
+
+        // One fetch with an AbortController. A payment confirmation that hangs
+        // forever is indistinguishable from a crash to the player, and on a
+        // flaky mobile connection it is the most likely failure of all.
+        async function postDepositVerification(url, options, timeoutMs) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
+            try {
+                return await fetch(url, { ...options, signal: controller.signal });
+            } finally {
+                clearTimeout(timer);
+            }
+        }
+
         async function verifyDepositWithServer(reference, expectedAmount) {
             const client = getSupabaseAuthClient();
             if (!client) {
-                throw new Error('Could not reach the server. Please try again.');
+                throw depositVerifyError('Could not reach the server. Check your connection and try again.', 'config');
             }
 
-            const { data: sessionData } = await client.auth.getSession();
-            const token = sessionData?.session?.access_token;
+            let token = '';
+            try {
+                const { data: sessionData } = await client.auth.getSession();
+                token = sessionData?.session?.access_token || '';
+            } catch (e) {
+                throw depositVerifyError('Could not read your session. Please log in again.', 'session');
+            }
             if (!token) {
-                throw new Error('Your session expired. Please log in again.');
+                throw depositVerifyError('Your session expired. Please log in again.', 'auth', 401);
             }
 
             const baseUrl = (window.ODDZONE_CONFIG?.supabase?.url)
                 || 'https://csrfrzzpduhhzldirdfi.supabase.co';
+            const anonKey = window.ODDZONE_CONFIG?.supabase?.anonKey || '';
+            const url = `${baseUrl.replace(/\/$/, '')}/functions/v1/verify-deposit`;
+            const requestOptions = {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                    'apikey': anonKey
+                },
+                body: JSON.stringify({ reference, amount: expectedAmount })
+            };
 
+            // A dropped connection is worth one automatic retry: the reference
+            // is idempotent server-side, so re-sending it can never double-credit.
             let response;
-            try {
-                response = await fetch(`${baseUrl}/functions/v1/verify-deposit`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`,
-                        'apikey': window.ODDZONE_CONFIG?.supabase?.anonKey || ''
-                    },
-                    body: JSON.stringify({ reference, amount: expectedAmount })
-                });
-            } catch (e) {
-                throw new Error('Network error while confirming your payment. Please try again.');
+            let lastTransportError = null;
+            for (let attempt = 1; attempt <= 2; attempt++) {
+                try {
+                    response = await postDepositVerification(url, requestOptions, DEPOSIT_VERIFY_TIMEOUT_MS);
+                    break;
+                } catch (e) {
+                    lastTransportError = e;
+                    const aborted = e?.name === 'AbortError';
+                    console.warn(`[OddZone] Deposit verify attempt ${attempt} failed:`, aborted ? 'timeout' : e?.message || e);
+                    if (attempt === 1) await new Promise(r => setTimeout(r, 1200));
+                }
+            }
+
+            if (!response) {
+                const aborted = lastTransportError?.name === 'AbortError';
+                throw depositVerifyError(
+                    aborted
+                        ? 'The payment confirmation timed out. Your card was not charged again — check your transaction history before retrying.'
+                        : 'Network error while confirming your payment. Check your connection and try again.',
+                    aborted ? 'timeout' : 'network'
+                );
             }
 
             let body = {};
-            try { body = await response.json(); } catch (e) { /* non-JSON error page */ }
-
-            if (!response.ok) {
-                throw new Error(body?.error || 'We could not confirm this payment yet.');
+            let rawText = '';
+            try {
+                rawText = await response.text();
+                body = rawText ? JSON.parse(rawText) : {};
+            } catch (e) {
+                // A non-JSON body is a real diagnostic, not noise: it is what an
+                // HTML 404 (function not deployed) or a proxy error page looks like.
+                console.warn('[OddZone] Deposit verify returned a non-JSON body:', rawText.slice(0, 200));
             }
 
-            return Number(body.credited || 0);
+            if (!response.ok) {
+                if (response.status === 404) {
+                    throw depositVerifyError(
+                        'Payment confirmation is not available on the server yet. Your money is safe with Paystack — contact support with your reference.',
+                        'not_deployed',
+                        404
+                    );
+                }
+                if (response.status === 401 || response.status === 403) {
+                    throw depositVerifyError('Your session expired. Please log in again.', 'auth', response.status);
+                }
+                if (response.status === 402) {
+                    throw depositVerifyError('Paystack has not confirmed this payment yet. Wait a few seconds and try again.', 'pending', 402);
+                }
+                if (response.status === 409) {
+                    throw depositVerifyError('This payment has already been credited to your wallet.', 'duplicate', 409);
+                }
+                if (response.status >= 500) {
+                    throw depositVerifyError('The payment service is having trouble right now. Please try again shortly.', 'server', response.status);
+                }
+                throw depositVerifyError(body?.error || 'We could not confirm this payment yet.', 'rejected', response.status);
+            }
+
+            const credited = Number(body.credited || 0);
+            if (!Number.isFinite(credited) || credited <= 0) {
+                throw depositVerifyError('The server did not report a credited amount. Your balance is unchanged.', 'bad_response', response.status);
+            }
+            return credited;
         }
 
         function processPaystackDeposit() {
@@ -3159,8 +3305,15 @@
                             setTimeout(() => closeDepositModal(), 2000);
                         })
                         .catch((err) => {
-                            console.warn('Deposit verification failed:', err);
-                            setDepMsg(err.message || 'We could not confirm this payment yet. Your balance is unchanged — please contact support if this persists.', true);
+                            // The money is already with Paystack at this point, so
+                            // the reference is kept on screen: it is the only thing
+                            // support needs to find and credit the payment by hand.
+                            console.warn('[OddZone] Deposit verification failed:', err?.code || '', err?.status || '', err);
+                            const retryable = ['network', 'timeout', 'server', 'pending'].includes(err?.code);
+                            const suffix = retryable
+                                ? ' Tap "Pay via Paystack" again to retry the confirmation — you will not be charged twice.'
+                                : '';
+                            setDepMsg(`${err?.message || 'We could not confirm this payment yet.'}${suffix} Reference: ${response.reference}`, true);
                         });
                 },
                 onClose() {
@@ -3392,20 +3545,21 @@
         }
 
         // Resolves the registered account holder name for a NUBAN account.
-        // Tries the Supabase edge function first, then Paystack directly.
-        // Distinguishes why a lookup failed so the UI can say something useful:
-        //   { success: true,  account_name }
-        //   { success: false, reason: 'rejected'   }  provider said no / bad account
-        //   { success: false, reason: 'quota'     }  provider rate/quota limit
-        //   { success: false, reason: 'unreachable'}  network or config failure
-        // Resolves the registered account holder name for a NUBAN account.
         // The Paystack secret key never reaches the browser: the lookup goes
         // through the 'verify-identity' edge function, which holds the secret.
         // Distinguishes why a lookup failed so the UI can say something useful:
         //   { success: true,  account_name }
         //   { success: false, reason: 'rejected'   }  provider said no / bad account
         //   { success: false, reason: 'quota'     }  provider rate/quota limit
+        //   { success: false, reason: 'auth'      }  session missing/expired
+        //   { success: false, reason: 'not_deployed' } function is not published
         //   { success: false, reason: 'unreachable'}  network or config failure
+        //
+        // The 400/422 body Paystack returns for an unresolvable account is a
+        // perfectly normal answer, so it must be told apart from a transport
+        // failure. supabase-js surfaces every non-2xx as an error whose
+        // context holds the real Response; without reading it, a wrong account
+        // number and a dead network look identical.
         async function fetchLivePaystackAccountName(bankCode, accountNumber) {
             const cleanCode = String(bankCode || '').split('|')[0].trim();
             if (!cleanCode || !/^\d{10}$/.test(String(accountNumber || ''))) {
@@ -3415,7 +3569,19 @@
             // Supabase Edge Function 'verify-identity'
             const client = getSupabaseAuthClient();
             if (!client) {
-                return { success: false, reason: 'unreachable', message: 'Not signed in.' };
+                return { success: false, reason: 'unreachable', message: 'Could not reach the server. Check your connection and try again.' };
+            }
+
+            // The function rejects a request with no JWT before it ever looks
+            // at the account, so check the session here and say so plainly
+            // rather than reporting a misleading "invalid account".
+            let token = '';
+            try {
+                const { data: sessionData } = await client.auth.getSession();
+                token = sessionData?.session?.access_token || '';
+            } catch (e) { /* fall through to the auth branch below */ }
+            if (!token) {
+                return { success: false, reason: 'auth', message: 'Your session expired. Please log in again.' };
             }
 
             try {
@@ -3426,12 +3592,33 @@
                 if (!error && data?.success && data.account_name) {
                     return { success: true, account_name: data.account_name };
                 }
-                if (error && /fetch|network|cors|failed to fetch|load failed/i.test(errMsg)) {
+
+                // Read the real HTTP status out of the FunctionsHttpError.
+                let status = 0;
+                let bodyText = '';
+                try {
+                    const res = error?.context;
+                    if (res && typeof res.status === 'number') {
+                        status = res.status;
+                        bodyText = await res.clone().text();
+                    }
+                } catch (e) { /* non-Response context */ }
+
+                if (status === 401 || status === 403) {
+                    return { success: false, reason: 'auth', message: 'Your session expired. Please log in again.' };
+                }
+                // supabase-js reports a function that was never deployed (or
+                // was deleted) as a bare 404 with no JSON body.
+                if (status === 404) {
+                    console.warn('[OddZone] verify-identity edge function is not deployed.');
+                    return { success: false, reason: 'not_deployed', message: 'Account verification service is not available yet.' };
+                }
+                if (/fetch|network|cors|failed to fetch|load failed|timeout/i.test(errMsg) && !status) {
                     console.warn('[OddZone] Could not reach the account verification service:', errMsg);
                     return { success: false, reason: 'unreachable', message: errMsg };
                 }
 
-                const message = String(data?.error || errMsg || '');
+                const message = String(data?.error || bodyText || errMsg || '');
                 // Paystack's test keys only allow a handful of live resolves per
                 // day, which is a limit on our account, not a fault in the user's
                 // account number.
@@ -3444,6 +3631,27 @@
                 const message = String(e?.message || e);
                 console.warn('[OddZone] Could not reach the account verification service:', message);
                 return { success: false, reason: 'unreachable', message };
+            }
+        }
+
+        // Turns a failed lookup into one short line for the form, so the player
+        // is never left with an empty box wondering whether it worked.
+        function accountLookupMessage(result, bankName) {
+            switch (result?.reason) {
+                case 'quota':
+                    return 'Verified checksum, but the bank name lookup is rate-limited right now. Your account is still accepted.';
+                case 'auth':
+                    return 'Please log in again to verify the account name.';
+                case 'not_deployed':
+                    return 'Account name lookup is unavailable. Enter your account name manually.';
+                case 'unreachable':
+                    return 'Could not reach the bank lookup service. Check your connection and try again.';
+                default: {
+                    const detail = String(result?.message || '').replace(/^.*?message["']?\s*:\s*/i, '').slice(0, 90);
+                    return detail
+                        ? `Could not resolve this ${bankName || 'bank'} account: ${detail}`
+                        : `Could not resolve this ${bankName || 'bank'} account number.`;
+                }
             }
         }
 
@@ -3577,14 +3785,13 @@
                     }
                     return;
                 }
-                // Fallback valid display
-                if (cardEl && cardNameEl && cardBankEl) {
-                    const fallbackName = document.getElementById('kyc-name-input')?.value || activeUser.name || 'Registered Account Holder';
-                    cardNameEl.textContent = fallbackName;
-                    cardBankEl.textContent = `${bankName} · ${accountNumber}`;
-                    cardEl.classList.remove('hidden');
-                    resolvedEl.textContent = '';
-                }
+                // The lookup did not return a name. Showing the number back with
+                // the account holder's own name stamped on it looks like a
+                // verified match while proving nothing, so the card stays hidden
+                // and the reason is spelled out instead.
+                if (cardEl) cardEl.classList.add('hidden');
+                resolvedEl.textContent = `⚠️ ${accountLookupMessage(liveResult, bankName)}`;
+                resolvedEl.className = 'mt-1 text-[11px] font-semibold text-amber-300 min-h-4';
             }, 300);
         }
 
@@ -3665,10 +3872,10 @@
             let verifiedAccountHolderName = legalName;
 
             // 6. Live bank account resolution.
-            // fetchLivePaystackAccountName tries the Supabase edge function and
-            // then the Paystack REST API directly, so one failing path no longer
-            // blocks a valid account.
-            const client = getSupabaseAuthClient();
+            // fetchLivePaystackAccountName routes through the verify-identity
+            // edge function, which holds the Paystack secret key. It reports
+            // *why* it failed so a provider outage is never blamed on the
+            // player's account number.
             const lookup = await fetchLivePaystackAccountName(bankCode, accountNumber);
             if (lookup && lookup.success && lookup.account_name) {
                 verifiedAccountHolderName = lookup.account_name;
@@ -3684,14 +3891,14 @@
                     setKycMsg(`❌ Identity Mismatch: Name "${legalName}" does not match registered bank account name ("${lookup.account_name}"). Please use your real ID and bank details.`, true);
                     return;
                 }
-            } else if (lookup && lookup.reason === 'unreachable') {
+            } else if (lookup && (lookup.reason === 'unreachable' || lookup.reason === 'not_deployed' || lookup.reason === 'auth')) {
                 // The provider could not be reached at all. Don't blame the
                 // user's account number for our own network/config problem.
                 if (submitBtn) {
                     submitBtn.disabled = false;
                     submitBtn.innerHTML = '<i class="fa-solid fa-shield-halved text-xs"></i><span>VERIFY REAL IDENTITY</span>';
                 }
-                setKycMsg('⚠️ We could not reach the bank verification service right now. Your details have not been saved — please try again in a few minutes.', true);
+                setKycMsg(`⚠️ ${accountLookupMessage(lookup, bankName)} Your details have not been saved.`, true);
                 return;
             } else if (lookup && lookup.reason === 'rejected') {
                 const bName = bankName.toLowerCase();
@@ -3813,13 +4020,21 @@
                     }
                     return;
                 }
-                // Fallback display
-                if (cardEl && cardNameEl && cardBankEl) {
-                    cardNameEl.textContent = activeUser.kyc?.name || activeUser.name || 'Verified Recipient';
+                // A withdrawal must never be sent on a name we could not confirm.
+                // Fall back to the KYC-verified name only when there is one, and
+                // otherwise say why the lookup failed.
+                const verifiedName = activeUser.kyc?.accountName || activeUser.kyc?.name || '';
+                if (verifiedName && cardEl && cardNameEl && cardBankEl) {
+                    cardNameEl.textContent = verifiedName;
                     cardBankEl.textContent = `${bankName} · ${accountNumber}`;
                     cardEl.classList.remove('hidden');
-                    resolvedEl.textContent = '';
+                    resolvedEl.textContent = `⚠️ Live lookup unavailable — using your KYC-verified name.`;
+                    resolvedEl.className = 'mt-1 text-[11px] font-semibold text-amber-300 min-h-4';
+                    return;
                 }
+                if (cardEl) cardEl.classList.add('hidden');
+                resolvedEl.textContent = `⚠️ ${accountLookupMessage(liveResult, bankName)}`;
+                resolvedEl.className = 'mt-1 text-[11px] font-semibold text-amber-300 min-h-4';
             }, 300);
         }
 
@@ -3900,6 +4115,22 @@
                 return;
             }
 
+            // Confirm the money is going to a real, named account before it
+            // leaves the wallet. A checksum only proves the digits are
+            // well-formed, not that the account exists.
+            setWdMsg('Verifying the destination account…', false);
+            const lookup = await fetchLivePaystackAccountName(bankCode, accountNumber);
+            if (!lookup?.success || !lookup.account_name) {
+                const verifiedName = activeUser.kyc?.accountName || activeUser.kyc?.name || '';
+                const sameAccount = activeUser.kyc?.accountNumber === accountNumber
+                    && String(activeUser.kyc?.bankCode || '') === String(bankCode);
+                if (!(sameAccount && verifiedName)) {
+                    setWdMsg(`❌ ${accountLookupMessage(lookup, bankName)}`, true);
+                    return;
+                }
+                setWdMsg('⚠️ Live lookup unavailable — using your KYC-verified account.', false);
+            }
+
             if (amount < 1000) { setWdMsg('Minimum withdrawal is ₦1,000.', true); return; }
             if (amount > userWalletBalance) { setWdMsg('Amount exceeds your available balance.', true); return; }
 
@@ -3909,7 +4140,7 @@
 
             // Save pending withdrawal locally
             const withdrawals = JSON.parse(localStorage.getItem(STORAGE_KEYS.withdrawals) || '[]');
-            const record = { bankName, bankCode, accountNumber, amount, status: 'Pending', time: new Date().toISOString() };
+            const record = { bankName, bankCode, accountNumber, accountName: lookup?.account_name || activeUser.kyc?.accountName || '', amount, status: 'Pending', time: new Date().toISOString() };
             withdrawals.unshift(record);
             localStorage.setItem(STORAGE_KEYS.withdrawals, JSON.stringify(withdrawals.slice(0, 50)));
             const transactions = JSON.parse(localStorage.getItem(STORAGE_KEYS.transactions) || '[]');
@@ -3973,9 +4204,21 @@
             if (custInput) custInput.value = selectedStakeAmount;
         }
 
+        // The stake presets the DATABASE accepts. open_duel() rejects anything
+        // outside this set with 'not an approved preset', so the client is
+        // checked against the same list instead of a min/max range: the old
+        // range check (>= 200) let a player type a legal-looking ₦1,500, press
+        // the button, and get an error from the server after the fact.
+        const STAKE_PRESETS = [100, 500, 1000, 2000, 5000];
+        const MIN_STAKE = 100;
+
         function onCustomStakeChange(value) {
             const amount = Number(value) || 0;
-            if (amount < 200) return;
+            if (!STAKE_PRESETS.includes(amount)) {
+                setStakeErr(invalidStakeMessage());
+                return;
+            }
+            setStakeErr('');
             selectedStakeAmount = amount;
             const payout = Math.floor(selectedStakeAmount * 2 * (1 - RAKE_PERCENT / 100));
             // Deactivate all preset buttons
@@ -3991,13 +4234,26 @@
             if (dispBtn) dispBtn.textContent = selectedStakeAmount.toLocaleString();
         }
 
+        // Shared by the custom-stake input and startStakeChallenge(), so the message a
+        // player sees while typing is the same one they'd get from the server.
+        function setStakeErr(msg) {
+            const el = document.getElementById('stake-error-status');
+            if (el) el.textContent = msg;
+        }
+
+        function invalidStakeMessage() {
+            return 'Choose a preset stake: ' + STAKE_PRESETS.map(n => '₦' + n.toLocaleString()).join(', ') + '.';
+        }
+
         async function startStakeChallenge() {
-            const errEl = document.getElementById('stake-error-status');
-            function setStakeErr(msg) { if (errEl) errEl.textContent = msg; }
             setStakeErr('');
 
             if (activeUser.isGuest) { setStakeErr('You must be logged in to stake real money.'); return; }
-            if (selectedStakeAmount < 200) { setStakeErr('Minimum stake is ₦200.'); return; }
+            if (!STAKE_PRESETS.includes(selectedStakeAmount)) {
+                setStakeErr(invalidStakeMessage());
+                return;
+            }
+            if (selectedStakeAmount < MIN_STAKE) { setStakeErr(`Minimum stake is ₦${MIN_STAKE}.`); return; }
             if (selectedStakeAmount > userWalletBalance) {
                 setStakeErr(`Insufficient balance. You have ₦${userWalletBalance.toLocaleString()}.`); return;
             }
@@ -4017,10 +4273,16 @@
             let challengeId;
             let newBalance;
             try {
+                // p_payout is deliberately NOT sent. The server derives it from
+                // the stake (20261004000004_server_side_payout.sql). Sending it
+                // let a tampered client post an arbitrary payout that
+                // settle_duel() then paid out of the wallet, so the client is no
+                // longer allowed to state the number at all. The 3-argument
+                // signature still exists as a forwarder purely so open tabs that
+                // predate this change keep working.
                 const { data, error } = await client.rpc('open_duel', {
                     p_game_id: selectedGameId,
-                    p_stake: selectedStakeAmount,
-                    p_payout: payout
+                    p_stake: selectedStakeAmount
                 });
                 if (error) throw error;
                 if (!data || !data.challenge_id) throw new Error('No challenge id returned.');
@@ -4059,8 +4321,437 @@
             };
 
             closeGameOptions();
-            // Launch the game in stake mode
-            launchGameModule('stake');
+            // Pre-matchmaking. Launching the game immediately meant the player
+            // burned a whole round alone before anyone could ever be found, so
+            // open_duel() now hands off to the 5-10 second search window.
+            beginDuelSearch(activeStakeChallenge);
+        }
+
+// ═══════════════════════════════════════════════════════════════════
+        // Find-or-create matchmaking
+        //
+        //   beginDuelSearch()   claim_duel_opponent() -> matched | queued
+        //   timer expires       begin_solo_play()     -> launch solo game
+        //   realtime 'matched'  the deferred duel resolves and the result card shows
+        //
+        // The search window is deliberately randomised between 5 and 10
+        // seconds. A fixed duration would mean every player in a quiet lobby
+        // finishes searching at the same instant, so the fallback would always
+        // fire in lockstep.
+        // ═══════════════════════════════════════════════════════════════════
+        const DUEL_SEARCH_MIN_MS = 5000;
+        const DUEL_SEARCH_MAX_MS = 10000;
+        let activeDuelSearch = null; // { challengeId, startedAt, duration, timer, resolved }
+        let duelChannel = null;
+
+        function setMatchmakingText(title, sub) {
+            const t = document.getElementById('matchmaking-status-title');
+            const s = document.getElementById('matchmaking-status-sub');
+            if (t && title) t.textContent = title;
+            if (s && sub) s.textContent = sub;
+        }
+
+        function showSearchBar(visible) {
+            const bar = document.getElementById('matchmaking-search-bar');
+            if (bar) bar.classList.toggle('hidden', !visible);
+        }
+
+        function setSearchProgress(fraction) {
+            const fill = document.getElementById('matchmaking-search-fill');
+            if (fill) fill.style.width = `${Math.max(0, Math.min(100, fraction * 100))}%`;
+        }
+
+        function showOpponentCard(opts) {
+            const card = document.getElementById('matchmaking-opponent-card');
+            const nameEl = document.getElementById('matchmaking-opponent-name');
+            const statusEl = document.getElementById('matchmaking-opponent-status');
+            const avatarEl = document.getElementById('matchmaking-opponent-avatar');
+            if (!card) return;
+            card.classList.remove('hidden');
+            if (nameEl) nameEl.textContent = opts.name || 'Opponent';
+            if (statusEl && opts.status) statusEl.textContent = opts.status;
+            if (avatarEl) {
+                if (opts.avatar) {
+                    // The avatar URL is user-controlled text, so quotes are
+                    // escaped before it goes into an inline style value.
+                    avatarEl.style.backgroundImage = `url("${String(opts.avatar).replace(/"/g, '&quot;')}")`;
+                    avatarEl.style.backgroundSize = 'cover';
+                    avatarEl.style.backgroundPosition = 'center';
+                    avatarEl.innerHTML = '';
+                } else {
+                    avatarEl.style.backgroundImage = 'none';
+                    avatarEl.innerHTML = '<i class="fa-solid fa-user text-slate-500"></i>';
+                }
+            }
+        }
+
+        function hideOpponentCard() {
+            document.getElementById('matchmaking-opponent-card')?.classList.add('hidden');
+        }
+
+        // Kick off the 5-10 second search window for a freshly opened challenge.
+        async function beginDuelSearch(challenge) {
+            if (!challenge || !challenge.id) return;
+            stopDuelSearch();
+
+            const modal = document.getElementById('matchmaking-modal');
+            const cancelBtn = document.getElementById('matchmaking-cancel-btn');
+            const homeBtn = document.getElementById('matchmaking-home-btn');
+            const doneBtn = document.getElementById('matchmaking-done-btn');
+            const playMoreBtn = document.getElementById('matchmaking-play-more-btn');
+            const breakdown = document.getElementById('matchmaking-score-breakdown');
+            if (modal) modal.classList.remove('hidden');
+            if (cancelBtn) cancelBtn.classList.remove('hidden');
+            if (homeBtn) homeBtn.classList.remove('hidden');
+            if (doneBtn) doneBtn.classList.add('hidden');
+            if (playMoreBtn) playMoreBtn.classList.add('hidden');
+            if (breakdown) breakdown.classList.add('hidden');
+            hideOpponentCard();
+            setMatchmakingText(
+                'Searching for Opponent...',
+                `Looking for a player at ${challenge.gameTitle || challenge.gameId} for ₦${Number(challenge.stake).toLocaleString()}`
+            );
+            showSearchBar(true);
+            setSearchProgress(0);
+
+            const duration = DUEL_SEARCH_MIN_MS
+                + Math.floor(Math.random() * (DUEL_SEARCH_MAX_MS - DUEL_SEARCH_MIN_MS + 1));
+
+            const search = {
+                challengeId: challenge.id,
+                startedAt: Date.now(),
+                duration,
+                timer: null,
+                resolved: false
+            };
+            activeDuelSearch = search;
+
+            // requestAnimationFrame so the bar tracks real elapsed time rather
+            // than drifting behind a fixed interval on a slow device.
+            const tick = () => {
+                if (activeDuelSearch !== search) return;
+                const fraction = (Date.now() - search.startedAt) / search.duration;
+                setSearchProgress(fraction);
+                if (fraction < 1) requestAnimationFrame(tick);
+            };
+            requestAnimationFrame(tick);
+
+            search.timer = setTimeout(() => onDuelSearchExpired(search), duration);
+
+            // Ask the database whether anyone is already waiting. The UPDATE
+            // inside this RPC is what realtime pushes to their dashboard.
+            try {
+                const client = getSupabaseAuthClient();
+                const { data, error } = await client.rpc('claim_duel_opponent', { p_challenge_id: challenge.id });
+                if (error) throw error;
+                if (data && data.matched) {
+                    onDuelOpponentFound({
+                        opponent_id: data.opponent_id,
+                        opponent_name: data.opponent_name,
+                        opponent_avatar: data.opponent_avatar
+                    }, challenge);
+                }
+            } catch (e) {
+                console.warn('claim_duel_opponent failed:', e);
+                // Not fatal. The timer still runs, so the worst case is the solo
+                // fallback, and realtime can still deliver a late match.
+                setMatchmakingText(
+                    'Searching for Opponent...',
+                    'Matchmaking is reconnecting. You will play solo if nobody joins.'
+                );
+            }
+        }
+
+        function stopDuelSearch() {
+            if (!activeDuelSearch) return;
+            clearTimeout(activeDuelSearch.timer);
+            activeDuelSearch.resolved = true;
+            activeDuelSearch = null;
+        }
+
+        // Someone was found before the timer ran out.
+        function onDuelOpponentFound(opponent, challenge) {
+            if (activeDuelSearch && activeDuelSearch.resolved) return;
+            const target = challenge || activeStakeChallenge;
+            // Ignore a push about a challenge that is not the one on screen.
+            if (activeDuelSearch && target && activeDuelSearch.challengeId !== target.id) return;
+            stopDuelSearch();
+
+            showSearchBar(false);
+            setSearchProgress(1);
+            // A matched duel can no longer be cancelled -- cancel_duel()
+            // refuses a 'matched' row and credits nothing -- so hide the
+            // refund button rather than offering a dead end.
+            const cancelBtn = document.getElementById('matchmaking-cancel-btn');
+            if (cancelBtn) cancelBtn.classList.add('hidden');
+            showOpponentCard({
+                name: opponent.opponent_name || 'Opponent',
+                avatar: opponent.opponent_avatar || '',
+                status: 'Opponent found!'
+            });
+            setMatchmakingText('Opponent Found!', 'Get ready...');
+            if (target) target.opponentId = opponent.opponent_id || null;
+
+            // Both sides have to be in the game. A player who was already
+            // playing keeps playing; the searching player launches now.
+            //
+            // The token check is load-bearing. This callback fires 900ms after
+            // the pairing, and nothing stopped it from running if the player had
+            // already moved on -- starting a new duel, or dismissing this one.
+            // Without the check, the stale timer closed the NEW duel's modal
+            // and cancelled its search about a second after it opened.
+            const token = activeStakeChallenge;
+            setTimeout(() => {
+                if (activeStakeChallenge !== token || token !== target) return;
+                closeMatchmakingModal();
+                if (target && selectedGameId !== target.gameId) {
+                    selectedGameId = target.gameId;
+                    const entry = GAME_CATALOG.find(g => g.id === target.gameId);
+                    selectedGameTitle = target.gameTitle || (entry && entry.title) || target.gameId;
+                }
+                launchGameModule('stake');
+            }, 900);
+        }
+
+        // The 5-10 second window closed with nobody waiting: play solo.
+        async function onDuelSearchExpired(search) {
+            if (!search || search.resolved || activeDuelSearch !== search) return;
+            search.resolved = true;
+            activeDuelSearch = null;
+            setSearchProgress(1);
+
+            const challenge = activeStakeChallenge;
+            if (!challenge || challenge.id !== search.challengeId) return;
+
+            // finishTimedMatch() reads this so the post-game copy tells the
+            // player their score is banked for a later match rather than
+            // claiming someone is still searching for them.
+            challenge.wasSolo = true;
+            challenge.status = 'solo';
+
+            setMatchmakingText('No Opponent Found', 'Dropping you into a solo run...');
+            const subEl = document.getElementById('matchmaking-status-sub');
+            if (subEl) subEl.textContent = 'Your score is saved and will be matched against a later opponent.';
+
+            try {
+                const client = getSupabaseAuthClient();
+                // Flip the row to 'solo'. It is deliberately NOT refunded: the
+                // player plays for real, and settle_duel() picks the banked
+                // score up against the next finisher at the same stake.
+                const { error } = await client.rpc('begin_solo_play', { p_challenge_id: challenge.id });
+                if (error) throw error;
+            } catch (e) {
+                console.warn('begin_solo_play failed:', e);
+            }
+
+            const token = activeStakeChallenge;
+            setTimeout(() => {
+                // Same stale-timer guard as onDuelOpponentFound(): if the player
+                // cancelled or started something else during these 800ms, this
+                // must not close that screen.
+                if (activeStakeChallenge !== token) return;
+                closeMatchmakingModal();
+                launchGameModule('stake');
+            }, 800);
+        }
+
+        // A player who was ALREADY waiting (their row was 'queued' with a
+        // banked score) gets paired by someone else arriving in the search
+        // window. They never ran a search themselves, so beginDuelSearch() and
+        // its timer are not involved -- but they still need to be told, and the
+        // game they are in must not be torn down mid-run.
+        function showOpponentFoundNotice(row) {
+            const challenge = activeStakeChallenge;
+            if (challenge) {
+                challenge.opponentId = row.opponent_id || null;
+                challenge.opponentName = row.opponent_name || 'Opponent';
+            }
+            // Surface it in the arena without interrupting play. The result
+            // card is reserved for a settled duel; this is just the pairing.
+            if (typeof addInAppNotification === 'function') {
+                addInAppNotification(
+                    'Opponent found!',
+                    (row.opponent_name || 'An opponent') + ' accepted your challenge. Play on - the winner is decided when you finish.',
+                    'info'
+                );
+            }
+        }
+
+        // Look up an opponent's display name and avatar.
+        //
+        // public_profiles, NOT profiles. profiles has an owner-only read policy
+        // for a reason -- it also holds wallet_balance, email and the KYC
+        // fields, so a cross-player read of it would be a data leak.
+        // public_profiles carries exactly username + avatar_url and is the one
+        // table that is world-readable on purpose.
+        async function fetchOpponentProfile(opponentId) {
+            const fallback = { name: 'Opponent', avatar: '' };
+            if (!opponentId) return fallback;
+            const client = getSupabaseAuthClient();
+            if (!client) return fallback;
+            try {
+                const { data, error } = await client
+                    .from('public_profiles')
+                    .select('username, avatar_url')
+                    .eq('user_id', opponentId)
+                    .maybeSingle();
+                if (error || !data) return fallback;
+                return {
+                    name: data.username || fallback.name,
+                    avatar: data.avatar_url || ''
+                };
+            } catch (e) {
+                return fallback;
+            }
+        }
+
+        // A duel I took part in has resolved. Show the result card.
+        async function showSettledDuelResult(row) {
+            // The realtime payload is the matched row, which already carries
+            // the opponent's final score -- so there is no need for a second
+            // read. (A previous version re-queried by opponent_challenge_id,
+            // which was one extra round trip and returned the wrong row.)
+            const oppScore = Number(row.score) || 0;
+
+            // The opponent snapshot is written at match time, so the card still
+            // renders a name and avatar if the profiles row has since changed.
+            let oppName = row.opponent_name;
+            let oppAvatar = row.opponent_avatar || '';
+            if (!oppName || !oppAvatar) {
+                const profile = await fetchOpponentProfile(row.opponent_id);
+                oppName = oppName || profile.name;
+                oppAvatar = oppAvatar || profile.avatar;
+            }
+
+            showMatchResultModal({
+                gameId: row.game_id,
+                stake: row.stake,
+                payout: row.payout,
+                myScore: row.my_score != null ? row.my_score : row.score,
+                oppScore,
+                oppName,
+                oppAvatar,
+                winnerId: row.winner_id
+            });
+
+            // The server moved the money, so the local balance is now a guess.
+            // This refresh must happen even if the board re-render fails --
+            // otherwise the player sees a stale balance until they reload.
+            await refreshWalletFromServer();
+            try {
+                renderActiveChallenges();
+            } catch (e) {
+                console.warn('renderActiveChallenges after duel:', e);
+            }
+        }
+
+        // ── Realtime: QUEUED -> MATCHED -> PLAYING -> WON/LOST/TIE ───────────
+        // Only one channel is ever opened. It is held in duelChannel rather
+        // than re-subscribed, so a second call cannot stack duplicate listeners
+        // that each render their own result card.
+        function subscribeDuelRealtime() {
+            const client = getSupabaseAuthClient();
+            if (!client || typeof client.channel !== 'function') return;
+            if (duelChannel) return;
+
+            duelChannel = client
+                .channel('oddzone:duel')
+                .on(
+                    'postgres_changes',
+                    { event: '*', schema: 'public', table: 'stake_challenges' },
+                    payload => handleDuelRowUpdate(payload.new || {})
+                )
+                .subscribe(status => {
+                    if (status === 'SUBSCRIBED') console.log('duel realtime: subscribed');
+                    if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                        console.warn('duel realtime:', status);
+                    }
+                });
+        }
+
+        async function handleDuelRowUpdate(row) {
+            if (!row || !activeUser || !activeUser.id) return;
+            const me = activeUser.id;
+            const isMine = row.user_id === me;
+            if (!isMine && row.opponent_id !== me) return;
+
+            // I was searching and my row has just been PAIRED.
+            //
+            // The signal is opponent_id being set, NOT status. Pairing
+            // deliberately leaves both rows on 'queued' -- settle_duel() opens
+            // with "if status='matched' then raise 'already settled'", so
+            // flipping the status here would close the payout path before
+            // either player had finished their game.
+            if (isMine && row.opponent_id && activeDuelSearch && !activeDuelSearch.resolved) {
+                onDuelOpponentFound({
+                    opponent_id: row.opponent_id,
+                    opponent_name: row.opponent_name,
+                    opponent_avatar: row.opponent_avatar
+                }, activeStakeChallenge);
+                return;
+            }
+
+            // The player who was ALREADY waiting gets paired by someone else
+            // arriving. They were not searching, so activeDuelSearch is null
+            // and the branch above cannot fire -- but they still need to know.
+            if (!isMine && row.opponent_id === me
+                && row.status !== 'matched' && row.status !== 'cancelled'
+                && typeof showOpponentFoundNotice === 'function') {
+                showOpponentFoundNotice(row);
+                return;
+            }
+
+            if (row.status === 'matched') {
+                // The opponent finished while I was waiting on a deferred (solo)
+                // duel, so this push resolves it.
+                //
+                // The test is same game + same stake + they are my opponent --
+                // NOT "is this row my challenge". The two rows always have
+                // DIFFERENT ids (each player owns one), so comparing my
+                // challenge id against row.user_id could never be true and the
+                // deferred duel silently never resolved.
+                const pending = activeStakeChallenge;
+                const isMyOpponent = row.opponent_id === me;
+                if (pending && !isMine && isMyOpponent
+                    && pending.gameId === row.game_id
+                    && Number(pending.stake) === Number(row.stake)) {
+                    activeStakeChallenge = null;
+                    // row already carries the opponent's snapshot and id, so
+                    // the card renders even if my own row cannot be re-read.
+                    await showSettledDuelResult({
+                        ...row,
+                        my_score: pending.score != null ? pending.score : 0,
+                        stake: row.stake,
+                        opponent_challenge_id: row.id
+                    });
+                    return;
+                }
+                await refreshWalletFromServer();
+                renderActiveChallenges();
+                return;
+            }
+
+            // Board updates for everyone else (a new queued challenge arrives).
+            if (typeof loadPendingBets === 'function') loadPendingBets();
+            renderActiveChallenges();
+        }
+
+        // Re-read my own challenge row so the result card shows the authoritative
+        // score and payout rather than whatever the local object remembers.
+        async function getMyChallengeRow(challengeId) {
+            const client = getSupabaseAuthClient();
+            if (!client || !challengeId) return null;
+            try {
+                const { data, error } = await client
+                    .from('stake_challenges')
+                    .select('*')
+                    .eq('id', challengeId)
+                    .maybeSingle();
+                if (error) return null;
+                return data || null;
+            } catch (e) {
+                return null;
+            }
         }
 
         function renderActiveChallenges() {
@@ -4075,7 +4766,7 @@
             client.from('stake_challenges')
                 .select('*')
                 .eq('user_id', activeUser.id)
-                .in('status', ['playing', 'queued', 'matched', 'completed'])
+                .in('status', ['playing', 'queued', 'solo', 'matched', 'completed'])
                 .order('created_at', { ascending: false })
                 .limit(5)
                 .then(({ data }) => {
@@ -4087,7 +4778,11 @@
                         let displayStatus = ch.status.toUpperCase();
                         let statusColor = 'text-slate-400';
                         if (ch.status === 'queued') {
+                            displayStatus = 'SEARCHING';
                             statusColor = 'text-amber-300';
+                        } else if (ch.status === 'solo') {
+                            displayStatus = 'SOLO';
+                            statusColor = 'text-fuchsia-300';
                         } else if (ch.status === 'playing') {
                             statusColor = 'text-cyan-400';
                         } else if (ch.status === 'matched' || ch.status === 'completed') {
@@ -4136,20 +4831,25 @@
                 }
 
                 // It's a resolved match. Fetch opponent profile if possible
-                let oppName = 'Opponent';
-                let oppAvatar = '';
+                // Snapshots taken at match time, so the card renders a name and
+                // avatar even if the profile has since been edited.
+                let oppName = ch.opponent_name || 'Opponent';
+                let oppAvatar = ch.opponent_avatar || '';
                 let oppScore = ch.opponent_score || 0;
                 
                 // Determine our score
                 let myScore = ch.score || 0;
 
                 const client = getSupabaseAuthClient();
-                if (client && ch.opponent_id) {
-                    const { data: oppData } = await client.from('profiles').select('name, avatar_url, username').eq('id', ch.opponent_id).single();
-                    if (oppData) {
-                        oppName = oppData.name || oppData.username || 'Player';
-                        oppAvatar = oppData.avatar_url || '';
-                    }
+                if (client && ch.opponent_id && (oppName === 'Opponent' || !oppAvatar)) {
+                    // The profiles table has a 'username' column, not 'name'.
+                    // Selecting a column that does not exist makes PostgREST
+                    // reject the whole query with a 400, so this used to always
+                    // return null and the card fell back to the literal string
+                    // "Opponent".
+                    const profile = await fetchOpponentProfile(ch.opponent_id);
+                    oppName = oppName === 'Opponent' ? profile.name : oppName;
+                    oppAvatar = oppAvatar || profile.avatar;
                 }
 
                 showMatchResultModal({
@@ -4175,6 +4875,18 @@
             const isTie = !data.winnerId;
             const isLoss = !isWin && !isTie;
 
+            // `payout` reaches this card from three places (the settle_duel
+            // response, a re-read challenge row, and a realtime payload) and
+            // the column defaults to 0. Formatting that straight into the
+            // template produced "+₦NaN" for a missing value and "+₦0" for a
+            // genuine win, so fall back to the same 1.8x figure the challenge
+            // board uses when there is no usable payout on the row.
+            const stakeAmount = Number(data.stake) || 0;
+            const payoutRaw = Number(data.payout);
+            const payoutAmount = (Number.isFinite(payoutRaw) && payoutRaw > 0)
+                ? payoutRaw
+                : Math.floor(stakeAmount * 1.8);
+
             const headerBg = document.getElementById('mr-header-bg');
             const outcomeIcon = document.getElementById('mr-outcome-icon');
             const outcomeTitle = document.getElementById('mr-outcome-title');
@@ -4187,7 +4899,7 @@
                 outcomeIcon.innerHTML = '<i class="fa-solid fa-trophy text-3xl text-emerald-400"></i>';
                 outcomeTitle.textContent = 'Victory';
                 outcomeTitle.className = 'text-2xl font-black text-white uppercase tracking-wider relative z-10';
-                outcomeAmount.textContent = `+₦${Number(data.payout).toLocaleString()}`;
+                outcomeAmount.textContent = `+₦${payoutAmount.toLocaleString()}`;
                 outcomeAmount.className = 'text-lg font-bold text-emerald-400 mt-1 relative z-10';
             } else if (isLoss) {
                 headerBg.className = 'pt-8 pb-10 px-6 text-center relative overflow-hidden bg-gradient-to-br from-rose-900 to-rose-950';
@@ -4261,7 +4973,16 @@
         }
 
         function closeMatchmakingModal() {
-            document.getElementById('matchmaking-modal').classList.add('hidden');
+            const modal = document.getElementById('matchmaking-modal');
+            if (!modal) return;
+            modal.classList.add('hidden');
+            // Left populated, these would leak the last opponent's avatar and a
+            // stale progress bar into the next duel, which opens on the same
+            // screen.
+            showSearchBar(false);
+            setSearchProgress(0);
+            hideOpponentCard();
+            stopDuelSearch();
         }
 
         function closeMatchmakingAndGoGames() {
@@ -4456,6 +5177,37 @@
             return resolveGameUrl(pathOrUrl);
         }
 
+        // ── game availability preflight ──────────────────────────────────────
+        // A single-page app cannot be told by the browser that an <iframe> 404'd:
+        // no `error` event fires and the load event succeeds, so the frame simply
+        // renders GitHub Pages' "That page isn't in the arena" document and the
+        // player is left staring at it. Fetching the file first turns a silent
+        // 404 into a sentence the player can act on, and keeps the failure inside
+        // our own UI instead of inside the iframe.
+        const gameAvailabilityCache = new Map();
+
+        async function checkGameFileAvailable(url) {
+            if (gameAvailabilityCache.has(url)) return gameAvailabilityCache.get(url);
+            const check = (async () => {
+                try {
+                    // HEAD first: GitHub Pages answers it for static files, and
+                    // it avoids downloading a multi-megabyte bundle twice.
+                    let res = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+                    if (res.status === 405 || res.status === 501) {
+                        res = await fetch(url, { method: 'GET', cache: 'no-store' });
+                    }
+                    return res.ok;
+                } catch (e) {
+                    // A CORS or offline failure is not proof the file is missing;
+                    // let the iframe try rather than blocking a working game.
+                    console.warn('[OddZone] Game availability check failed for', url, e);
+                    return true;
+                }
+            })();
+            gameAvailabilityCache.set(url, check);
+            return check;
+        }
+
         function launchGameModule(mode) {
             const game = GAME_CATALOG.find(candidate => candidate.id === selectedGameId);
             if (!game) return;
@@ -4480,6 +5232,26 @@
             clearInterval(matchTimerInterval);
             clearTimeout(matchFinishFallback);
             activeTimedMatch = null;
+            verifyGameFileThenLaunch(game, mode, launchToken);
+        }
+
+        // Confirms the game file is really published before the arena is shown,
+        // so a missing file reports itself instead of rendering a 404 page
+        // inside the play area.
+        async function verifyGameFileThenLaunch(game, mode, launchToken) {
+            const url = buildGameUrl(game.path);
+            const available = await checkGameFileAvailable(url);
+            // The player may have backed out, or started another game, while the
+            // check was in flight.
+            if (gameLaunchToken !== launchToken || selectedGameId !== game.id) return;
+            if (!available) {
+                showGameLoadError(game, `The game file is not on the server (${game.path}).`);
+                return;
+            }
+            startArenaLaunch(game, mode, launchToken);
+        }
+
+        function startArenaLaunch(game, mode, launchToken) {
             const isTimedMode = mode === 'practice' || mode === 'stake' || mode === 'feedDuel';
             pendingTimedMatchMode = isTimedMode ? mode : null;
             const badgeLabel = mode === 'practice' ? '2-Minute Practice' : (mode === 'stake' || mode === 'feedDuel') ? '1v1 Stake Duel' : 'Free Play';
@@ -4494,16 +5266,27 @@
                 let href = '';
                 try { href = frame.contentWindow?.location?.href || ''; } catch (e) {}
                 if (gameLaunchToken !== launchToken || selectedGameId !== game.id || href === 'about:blank') return;
+                // GitHub Pages serves 404.html for a missing file. The load event
+                // still fires and no `error` event ever does, so without this
+                // check the player would get the 404 page with a "TAP TO START"
+                // overlay on top of it and no explanation.
+                let frameTitle = '';
+                let frameText = '';
+                try {
+                    frameTitle = frame.contentDocument?.title || '';
+                    frameText = frame.contentDocument?.body?.innerText || '';
+                } catch (e) { /* cross-origin frame: cannot inspect, assume fine */ }
+                if (/page not found/i.test(frameTitle) || /isn't in the arena/i.test(frameText)) {
+                    showGameLoadError(game, `The server returned its 404 page for ${game.path}.`);
+                    return;
+                }
                 // Show Tap-to-Start overlay instead of starting immediately
                 const overlay = document.getElementById('arena-tap-to-start-overlay');
                 if (overlay) overlay.classList.remove('hidden');
             };
             frame.src = `${encodeURI(buildGameUrl(game.path))}?oddzoneRun=${Date.now()}`;
             document.getElementById('game-arena-modal').classList.remove('hidden');
-            // If the file is missing, onerror fires and the player would
-            // otherwise just stare at a blank black frame with a "TAP TO
-            // START" overlay on top and no idea why.
-            frame.onerror = () => showGameLoadError(game);
+            frame.onerror = () => showGameLoadError(game, `Could not load ${game.path}.`);
             document.getElementById('game-scoreboard').classList.toggle('hidden', !isTimedMode);
         }
 
@@ -4741,8 +5524,11 @@
                 const doneBtn = document.getElementById('matchmaking-done-btn');
                 const scoreYou = document.getElementById('match-score-you');
                 const breakdown = document.getElementById('matchmaking-score-breakdown');
-                if (titleEl) titleEl.textContent = 'Searching for Opponent…';
-                if (subEl) subEl.textContent = `Your score: ${score.toLocaleString()} pts. Looking for another player at ₦${challenge.stake.toLocaleString()}… Match stays active in background!`;
+                const wasSolo = challenge.wasSolo === true;
+                if (titleEl) titleEl.textContent = wasSolo ? 'Score Banked' : 'Searching for Opponent...';
+                if (subEl) subEl.textContent = wasSolo
+                    ? `Your solo score of ${score.toLocaleString()} pts is banked. It will be matched against another player's score at ₦${challenge.stake.toLocaleString()}.`
+                    : `Your score: ${score.toLocaleString()} pts. Looking for another player at ₦${challenge.stake.toLocaleString()}...`;
                 if (scoreYou) scoreYou.textContent = score.toLocaleString();
                 if (breakdown) breakdown.classList.remove('hidden');
                 if (homeBtn) homeBtn.classList.remove('hidden');
@@ -4778,19 +5564,20 @@
 
                     if (settled && settled.matched) {
                         if (mm) mm.classList.add('hidden');
-                        
-                        let oppName = 'Opponent';
-                        let oppAvatar = '';
-                        if (settled.opponent_id) {
-                            try {
-                                const { data: oppData } = await client.from('profiles').select('name, avatar_url, username').eq('id', settled.opponent_id).single();
-                                if (oppData) {
-                                    oppName = oppData.name || oppData.username || 'Opponent';
-                                    oppAvatar = oppData.avatar_url || '';
-                                }
-                            } catch (e) {}
+
+                        // The opponent identity arrives in the settle response
+                        // too, so the card does not depend on a profiles read.
+
+                        // The server already snapshotted the opponent at match
+                        // time, so no extra read is needed here.
+                        let oppName = settled.opponent_name || 'Opponent';
+                        let oppAvatar = settled.opponent_avatar || '';
+                        if (settled.opponent_id && (oppName === 'Opponent' || !oppAvatar)) {
+                            const profile = await fetchOpponentProfile(settled.opponent_id);
+                            oppName = oppName === 'Opponent' ? profile.name : oppName;
+                            oppAvatar = oppAvatar || profile.avatar;
                         }
-                        
+
                         showMatchResultModal({
                             gameId: challenge.gameId,
                             stake: challenge.stake,
@@ -4807,7 +5594,24 @@
                         await refreshWalletFromServer();
                     } else if (settled) {
                         // No opponent yet — stay queued and wait for realtime.
-                        if (subEl) subEl.textContent = `Your score: ${score.toLocaleString()} pts. Looking for another player at ₦${challenge.stake.toLocaleString()}… Match stays active in background!`;
+                        //
+                        // When the pairing already happened, this player is not
+                        // searching any more: their opponent simply has not
+                        // finished yet. Saying "looking for another player"
+                        // here would send them back to the matchmaking board to
+                        // queue a second time while a real opponent is already
+                        // assigned.
+                        const paired = Boolean(settled.opponent_id || challenge.opponentId);
+                        if (subEl) {
+                            subEl.textContent = paired
+                                ? `Your score: ${score.toLocaleString()} pts. Waiting for your opponent to finish…`
+                                : `Your score: ${score.toLocaleString()} pts. Looking for another player at ₦${challenge.stake.toLocaleString()}...`;
+                        }
+                        if (titleEl) {
+                            titleEl.textContent = paired
+                                ? 'Waiting for Opponent'
+                                : (wasSolo ? 'Score Banked' : 'Searching for Opponent...');
+                        }
                     }
                 }
                 renderActiveChallenges();
@@ -4865,7 +5669,7 @@
                         myScore: score,
                         oppScore: hostScore,
                         oppName: ctx.challenge.hostName || 'Opponent',
-                        oppAvatar: '', 
+                        oppAvatar: '',
                         winnerId: isTie ? null : (iWin ? activeUser.id : 'opponent')
                     });
 
@@ -4955,11 +5759,12 @@
             renderActiveChallenges();
         }
 
-        function showGameLoadError(game) {
+        function showGameLoadError(game, detail) {
             const overlay = document.getElementById('arena-tap-to-start-overlay');
             if (overlay) overlay.classList.add('hidden');
-            console.error(`[OddZone] Failed to load game file for "${game?.id}"`);
-            alert(`"${game?.title || 'This game'}" could not be loaded. The game file may be missing from the server.`);
+            console.error(`[OddZone] Failed to load game file for "${game?.id}"`, detail || '');
+            const reason = detail ? `\n\n${detail}` : '';
+            alert(`"${game?.title || 'This game'}" could not be loaded.${reason}\n\nPlease pull to refresh; if it keeps failing the game has not been published yet.`);
             closeGameArena();
         }
 
@@ -5755,7 +6560,7 @@
         function updateUserAvatarsUI() {
             const photo = localStorage.getItem('oddzone-profile-photo') || activeUser.photo;
             const initials = (activeUser.name || 'OZ').substring(0, 2).toUpperCase();
-            
+
             const profileInitial = document.getElementById('profile-initial');
             if (profileInitial) {
                 if (photo) {
@@ -5815,9 +6620,9 @@
             const highestScore = scores.reduce((max, s) => Math.max(max, Number(s.score || 0)), 0);
             const txs = JSON.parse(localStorage.getItem(STORAGE_KEYS.transactions) || '[]');
             const winsCount = txs.filter(t => (t.title || '').includes('Win')).length;
-            
+
             const xp = (trialsCount * 140) + Math.floor(highestScore * 2.2) + (winsCount * 500);
-            
+
             let tier = LEVEL_TIERS[0];
             for (const t of LEVEL_TIERS) {
                 if (xp >= t.minXp) {
@@ -6284,7 +7089,7 @@
             const list = document.getElementById('game-leaderboard-list');
             if (!list) return;
             const base = (GAME_PLAYER_BASES[gameId] || 1500) * 8;
-            
+
             const LEADERS_NAMES = [
                 'ApexStrike', 'ShadowFox', 'KingDave', 'ZainabPro', 'GhostRider',
                 'NaijaSniper', 'ChidiGamer', 'SpeedDemon', 'QueenB', 'Viper99',
@@ -6300,12 +7105,12 @@
             });
 
             list.innerHTML = leaderboard.map(entry => {
-                const badgeColor = entry.rank === 1 
-                    ? 'bg-amber-400 text-[#1a0e00] font-black' 
-                    : entry.rank === 2 
-                    ? 'bg-slate-300 text-[#0f172a] font-black' 
-                    : entry.rank === 3 
-                    ? 'bg-amber-600 text-white font-black' 
+                const badgeColor = entry.rank === 1
+                    ? 'bg-amber-400 text-[#1a0e00] font-black'
+                    : entry.rank === 2
+                    ? 'bg-slate-300 text-[#0f172a] font-black'
+                    : entry.rank === 3
+                    ? 'bg-amber-600 text-white font-black'
                     : 'bg-white/5 text-slate-400 font-bold';
                 return `
                     <div class="flex items-center justify-between p-2 rounded-xl bg-black/40 border border-white/5 hover:border-cyan-400/30 transition text-xs">
@@ -6326,7 +7131,21 @@
         }
 
         // Auto-apply saved theme and preferences on load
-        (function() {
+        //
+        // Deferred until DOMContentLoaded on purpose. renderHomeFeed() calls
+        // feedTimeLabel(), which is defined in liveActivity.js -- a classic
+        // script loaded with `defer`. Deferred scripts always run AFTER the
+        // document has finished parsing, but this inline script executes during
+        // parsing, so calling this straight away threw
+        // "ReferenceError: feedTimeLabel is not defined". Because that throw
+        // happened at the very end of this script, every function declaration
+        // and binding above it still initialised, but every statement AFTER the
+        // throw was skipped -- and more importantly the error escaped as an
+        // uncaught exception that aborted the rest of the block, leaving the
+        // home feed permanently blank and, on some paths, later top-level code
+        // unrun. Deferred scripts are guaranteed by the spec to have executed
+        // before DOMContentLoaded fires, so this is the earliest safe moment.
+        document.addEventListener('DOMContentLoaded', function () {
             const savedTheme = localStorage.getItem('oddzone-theme') || 'dark';
             if (savedTheme === 'light') applyTheme('light');
             updateSoundUI();
@@ -6337,7 +7156,16 @@
             updateProfileLevelUI();
             renderWithdrawalTicker();
             renderHomeFeed();
-        })();
+        });
+
+        // ── launch-path handles for automated checks ─────────────────────────
+        // These are plain function declarations, so inside this script the names
+        // already resolve on the global scope; assigning them onto window is
+        // only so an external harness (or the browser console) can reach them.
+        window.verifyGameFileThenLaunch = verifyGameFileThenLaunch;
+        window.checkGameFileAvailable = checkGameFileAvailable;
+        window.showGameLoadError = showGameLoadError;
+        window.launchGameModule = launchGameModule;
     </script>
 </body>
 </html>

@@ -142,15 +142,32 @@ export const joinPendingBet = async (betId) => {
 // channel delivered nothing. The real table is stake_challenges: an opponent
 // arriving shows up as a new queued row, and a duel settling shows up as that
 // row flipping to 'matched'.
+// Realtime for the duel flow lives in index.html now: subscribeDuelRealtime()
+// owns the single 'oddzone:duel' channel and handles every state change
+// (QUEUED -> MATCHED -> PLAYING -> WON/LOST/TIE), including the 5-10 second
+// search window and the solo fallback.
+//
+// The subscription used to live here, but it only listened for status='matched'
+// and simply closed the modal. That meant a player who was mid-search never
+// learned an opponent had arrived, and a player whose solo score settled later
+// was never shown the result. Keeping two channels on the same table also
+// delivered each UPDATE twice.
+//
+// Delegating instead of duplicating also means one channel, not two.
 export const subscribeMatchUpdates = () => {
+  if (typeof window.subscribeDuelRealtime === 'function') {
+    window.subscribeDuelRealtime();
+    return;
+  }
+
   const client = getClient();
-  if (!client || typeof client.channel !== "function") return;
+  if (!client || typeof client.channel !== 'function') return;
 
   try {
     client
-      .channel("public:stake_challenges")
+      .channel('public:stake_challenges')
       .on(
-        "postgres_changes",
+        'postgres_changes',
         { event: "*", schema: "public", table: "stake_challenges" },
         async (payload) => {
           const row = payload.new || {};

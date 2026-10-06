@@ -8,7 +8,11 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-dist
+# The built game is COMMITTED on purpose. GitHub Pages serves it directly
+# from games/cave-runner/dist/, and Pages does not run a build step -- with
+# this directory ignored, the iframe requested a path that was never
+# published and GitHub answered with its 404 page.
+# dist
 dist-ssr
 *.local
 .env

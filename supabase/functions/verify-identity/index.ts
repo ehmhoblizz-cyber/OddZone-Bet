@@ -7,11 +7,17 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // and a failure mid-handshake leaves the browser with an opaque error. Handle
 // every shape explicitly and always include the headers on the real response,
 // otherwise the client only ever sees "blocked by CORS policy".
+//
+// "*" is correct here: the endpoint authenticates with a Bearer JWT, not with
+// cookies, so there is no ambient authority for another origin to ride on.
+// If cookie-based sessions are ever introduced, replace this with an explicit
+// allow-list of the GitHub Pages origin.
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, cache-control, pragma",
+  "Access-Control-Expose-Headers": "content-length, x-request-id",
   "Access-Control-Max-Age": "86400",
   "Vary": "Origin",
 };

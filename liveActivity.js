@@ -337,6 +337,9 @@ function setRefreshLabel(text) {
     if (label) label.textContent = text || '';
 }
 
+// The header reload button is gone, so this only has to keep the pull
+// indicator in sync. It is written defensively because a stale cached page can
+// still contain the old button.
 function setRefreshVisual(busy, result) {
     const btn = document.getElementById('btn-refresh');
     const icon = document.getElementById('btn-refresh-icon');
@@ -349,13 +352,6 @@ function setRefreshVisual(busy, result) {
             icon.classList.add('fa-spin');
         } else {
             icon.classList.remove('fa-spin');
-            if (result) {
-                icon.classList.remove('fa-rotate');
-                // Restart the one-shot spin so a successful pull is visible.
-                void icon.offsetWidth;
-                icon.classList.add('fa-rotate');
-                setTimeout(() => icon.classList.remove('fa-rotate'), 700);
-            }
         }
     }
     setPullIndicator(busy ? 'loading' : (result ? 'done' : ''));
@@ -378,39 +374,71 @@ function flashRefreshToast(message) {
 }
 
 // ── pull-to-refresh gesture ──────────────────────────────────────────────────
-// #main-scroll-area is the only scrollable element in the app, so the gesture
-// is bound there. It only arms at scrollTop === 0, otherwise pulling down while
-// scrolling up would trigger a refresh in the middle of the feed.
+// #main-scroll-area is the only scrollable element in the app, so the listener
+// lives there, but the gesture is armed only while one of the data screens is
+// showing. On Games, Rewards or Profile a downward swipe is just a scroll, and
+// refreshing the wallet and feed underneath them would be wasted work.
+//
+// It also only arms at scrollTop === 0, otherwise pulling down while scrolling
+// up would trigger a refresh in the middle of the feed.
 const PULL = {
     startY: 0,
     startScroll: 0,
     pulling: false,
+    armed: false,
     distance: 0,
-    THRESHOLD: 68,
+    THRESHOLD: 60,   // px of *movement* needed to fire the refresh
     MAX: 110
 };
+
+// Screens whose content comes from the server and can meaningfully change
+// while the app is open.
+const PULL_REFRESH_VIEWS = ['home', 'wallet', 'friends'];
+
+function activeViewId() {
+    const visible = document.querySelector('[id^="view-"]:not(.hidden)');
+    return visible ? visible.id.replace(/^view-/, '') : '';
+}
+
+function isPullRefreshView() {
+    return PULL_REFRESH_VIEWS.includes(activeViewId());
+}
 
 function setPullIndicator(state) {
     const el = document.getElementById('pull-indicator');
     if (!el) return;
     el.dataset.state = state || '';
     el.classList.toggle('is-active', Boolean(state));
+    el.classList.toggle('is-dragging', state === 'ready');
+    if (!state) {
+        // Animate back up, then drop the transition so the next drag is direct.
+        el.classList.add('is-settling');
+        el.style.transform = 'translateY(0px)';
+        const arrow = el.querySelector('.pull-arrow');
+        if (arrow) arrow.style.transform = '';
+        clearTimeout(el._settleTimer);
+        el._settleTimer = setTimeout(() => el.classList.remove('is-settling'), 240);
+    }
 }
 
 function onPullStart(e) {
     const area = document.getElementById('main-scroll-area');
+    PULL.armed = false;
+    PULL.pulling = false;
+    PULL.startY = 0;
+    PULL.distance = 0;
     if (!area || area.scrollTop > 2) return;
     if (LIVE.refreshing) return;
+    if (!isPullRefreshView()) return;
     // Ignore multi-touch: a pinch must never start a refresh.
     if (e.touches && e.touches.length > 1) return;
+    PULL.armed = true;
     PULL.startY = e.touches[0].clientY;
     PULL.startScroll = area.scrollTop;
-    PULL.pulling = false;
-    PULL.distance = 0;
 }
 
 function onPullMove(e) {
-    if (PULL.startY === 0) return;
+    if (!PULL.armed) return;
     const area = document.getElementById('main-scroll-area');
     if (!area) return;
 
@@ -434,8 +462,12 @@ function onPullMove(e) {
 
     const indicator = document.getElementById('pull-indicator');
     if (indicator) {
+        indicator.classList.remove('is-settling');
         const progress = Math.min(1, PULL.distance / PULL.THRESHOLD);
-        indicator.style.transform = `translate(-50%, ${PULL.distance}px)`;
+        indicator.style.transform = `translateY(${PULL.distance}px)`;
+        // The arrow fills in as the threshold approaches, and flips to "release
+        // to refresh" once it is reached — the same cue native apps use.
+        indicator.dataset.state = progress >= 1 ? 'armed' : 'ready';
         const spinner = indicator.querySelector('.pull-arrow');
         if (spinner) spinner.style.transform = `rotate(${progress * 180}deg)`;
     }
@@ -445,6 +477,7 @@ function onPullMove(e) {
 }
 
 function onPullEnd() {
+    PULL.armed = false;
     if (!PULL.pulling) { PULL.startY = 0; return; }
     const reached = PULL.distance >= PULL.THRESHOLD;
     PULL.pulling = false;
@@ -452,7 +485,7 @@ function onPullEnd() {
     PULL.distance = 0;
 
     const indicator = document.getElementById('pull-indicator');
-    if (indicator) indicator.style.transform = 'translate(-50%, 0px)';
+    if (indicator) indicator.style.transform = 'translateY(0px)';
 
     if (reached) {
         setPullIndicator('loading');
