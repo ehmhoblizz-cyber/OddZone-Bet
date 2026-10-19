@@ -31,6 +31,9 @@ export const loadPendingBets = async () => {
       .from("stake_challenges")
       .select("id, game_id, stake, payout, status, created_at, user_id")
       .eq("status", "queued")
+      .is("opponent_id", null)
+      .is("settled_at", null)
+      .is("refund_amount", null)
       .order("created_at", { ascending: false })
       .limit(10);
 
@@ -38,19 +41,8 @@ export const loadPendingBets = async () => {
       query = query.neq("user_id", currentUserId);
     }
 
-    let { data, error } = await query;
-
-    if (error || !data || data.length === 0) {
-      // Fallback: check pending_bets table
-      const pbQuery = await client
-        .from("pending_bets")
-        .select("id, game_id, stake, created_at, user_id")
-        .order("created_at", { ascending: false })
-        .limit(10);
-      if (!pbQuery.error && pbQuery.data) {
-        data = pbQuery.data;
-      }
-    }
+    const { data, error } = await query;
+    if (error) throw error;
 
     if (!data || !data.length) {
       container.innerHTML = `<p class="rounded-xl border border-white/10 bg-cardBg px-4 py-3 text-xs text-slate-400">No open challenges waiting right now. Start a 1v1 match above!</p>`;
@@ -79,16 +71,25 @@ export const loadPendingBets = async () => {
       .join("");
 
     container.querySelectorAll(".join-challenge-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", async () => {
         const betId = btn.dataset.id;
         const gameId = btn.dataset.game;
         const stake = Number(btn.dataset.stake || 1000);
-        acceptChallengeDuel(betId, gameId, stake);
+        btn.disabled = true;
+        btn.textContent = "Accepting…";
+        try {
+          await acceptChallengeDuel(betId, gameId, stake);
+        } finally {
+          if (btn.isConnected) {
+            btn.disabled = false;
+            btn.textContent = "Accept Duel";
+          }
+        }
       });
     });
   } catch (err) {
     console.warn("loadPendingBets error:", err);
-    container.innerHTML = `<p class="rounded-xl border border-white/10 bg-cardBg px-4 py-3 text-xs text-slate-400">No open challenges waiting right now.</p>`;
+    container.innerHTML = `<p class="rounded-xl border border-white/10 bg-cardBg px-4 py-3 text-xs text-rose-300">Could not load open challenges. Check your connection and try again.</p>`;
   }
 };
 
@@ -100,39 +101,21 @@ export const acceptChallengeDuel = async (betId, gameId, stake) => {
     alert("Please log in to accept real money 1v1 challenges.");
     return;
   }
-  if (typeof window.userWalletBalance === "number" && window.userWalletBalance < stake) {
-    alert(`Insufficient balance (₦${window.userWalletBalance.toLocaleString()}). Please deposit to accept this ₦${stake.toLocaleString()} challenge.`);
-    if (typeof window.switchTab === "function") window.switchTab("wallet");
+  if (typeof window.acceptStakeChallenge !== "function") {
+    alert("Challenge acceptance is not available yet. Reload the app and try again.");
     return;
   }
 
-  // Pre-select game and stake. openGameOptions() resets the stake back to the
-  // ₦1000 default, so the exact amount has to be re-applied afterwards or the
-  // player silently accepts a duel for the wrong amount.
-  if (typeof window.openGameOptions === "function" && gameId) {
-    window.openGameOptions(gameId);
+  try {
+    await window.acceptStakeChallenge(betId, gameId, Number(stake));
+  } catch (err) {
+    console.warn("accept_duel_challenge failed:", err);
+    const message = err?.message || "Could not confirm acceptance. Retry this same challenge to safely check its status.";
+    alert(message);
+    if (/insufficient balance/i.test(message) && typeof window.switchTab === "function") {
+      window.switchTab("wallet");
+    }
   }
-  if (typeof window.selectStakeAmount === "function") {
-    window.selectStakeAmount(stake);
-  }
-};
-
-// ------------------------------------------------------------------
-// Queue this player's own score and try to settle a duel
-// ------------------------------------------------------------------
-// The old version called a `join_pending_bet` RPC that has never existed, so
-// it always errored and returned without doing anything. Matching now happens
-// inside settle_duel(), which picks the opponent, decides the winner and moves
-// the money in one locked transaction.
-export const joinPendingBet = async (betId) => {
-  const client = getClient();
-  if (!client) return;
-  const { error } = await client.rpc("settle_duel", { p_challenge_id: betId, p_score: 0 });
-  if (error) {
-    console.error("settle_duel error:", error);
-    return;
-  }
-  showMatchmakingModal();
 };
 
 // ------------------------------------------------------------------
@@ -216,7 +199,6 @@ const hideMatchmakingModal = () => {
 // Expose globally for legacy & window event listeners
 window.loadPendingBets = loadPendingBets;
 window.acceptChallengeDuel = acceptChallengeDuel;
-window.joinPendingBet = joinPendingBet;
 window.subscribeMatchUpdates = subscribeMatchUpdates;
 
 // Initialise on load

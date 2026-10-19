@@ -77,8 +77,18 @@ function feedTimeLabel(timestamp, fallback) {
 // ── remote post → feed-post shape ────────────────────────────────────────────
 function normalizeRemotePost(row) {
     if (!row || !row.id) return null;
+    const demoIds = typeof window.getLegacyDemoFeedPostIds === 'function'
+        ? window.getLegacyDemoFeedPostIds()
+        : [];
+    if (demoIds.includes(row.id)) return null;
+    const challengeId = row.challenge_id
+        || (row.type === 'duel' && String(row.id).startsWith('duel-') ? String(row.id).slice(5) : null);
     return {
         id: row.id,
+        userId: row.user_id || null,
+        challengeId: challengeId || null,
+        challengeStatus: row.challenge_status || null,
+        isPublic: row.is_public !== false,
         author: row.author || 'Player',
         authorLevel: Number(row.author_level || 1),
         authorTitle: row.author_title || 'Duelist',
@@ -108,6 +118,10 @@ function mergeRemoteFeedPosts(rows) {
     local.forEach(p => { if (p && p.id) byId.set(p.id, p); });
     incoming.forEach(p => {
         const prev = byId.get(p.id);
+        if (!p.isPublic && p.userId !== currentUser()?.id) {
+            byId.delete(p.id);
+            return;
+        }
         // likedByMe is a local decision — the server has no opinion about it.
         byId.set(p.id, prev ? { ...p, likedByMe: Boolean(prev.likedByMe) } : p);
     });
@@ -131,20 +145,20 @@ function removeRemoteFeedPost(postId) {
 }
 
 // ── publish ──────────────────────────────────────────────────────────────────
-// Called by index.html right after a post is added locally, so the UI is
-// instant and the broadcast is a background concern. A guest has no account and
-// therefore no row to insert — their post stays on their own device, which is
-// the honest behaviour rather than pretending it went live.
-function broadcastFeedPost(post) {
-    if (!post || !post.id) return;
+// Publish posts through the authenticated account so every connected feed sees
+// the same server-backed row.
+async function broadcastFeedPost(post) {
+    if (!post || !post.id) throw new Error('This post is missing its id.');
     const client = liveClient();
-    if (!client || !isSignedIn()) return;
+    if (!client) throw new Error('The shared feed service is unavailable. Check your connection and try again.');
+    if (!isSignedIn()) throw new Error('Sign in to an account to share posts with other players.');
 
     const user = currentUser();
     const row = {
         id: post.id,
         user_id: user.id,
         author: post.author || user.name,
+        username: post.author || user.name || 'Player',
         author_level: Number(post.authorLevel || 1),
         author_title: post.authorTitle || null,
         author_photo: post.authorPhoto || user.photo || null,
@@ -152,17 +166,67 @@ function broadcastFeedPost(post) {
         content: post.content || '',
         game_id: post.gameId || null,
         game_title: post.gameTitle || null,
+        challenge_id: post.challengeId || null,
         stake: post.stake != null ? Number(post.stake) : null,
         amount: post.amount != null ? Number(post.amount) : null,
         likes: 0
     };
 
-    client.from('feed_posts').insert(row).then(({ error }) => {
-        if (error) {
-            // The local post stays put; only the cross-device push is lost.
-            console.warn('Feed post broadcast failed:', error.message || error);
+    const publish = async () => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 20000);
+        try {
+            return await client.from('feed_posts').upsert(row, {
+                onConflict: 'id',
+                ignoreDuplicates: true
+            }).abortSignal(controller.signal);
+        } finally {
+            clearTimeout(timeout);
         }
-    });
+    };
+
+    let result;
+    try {
+        result = await publish();
+        if (result.error && /jwt expired|token is expired/i.test(result.error.message || '')) {
+            const { data, error } = await client.auth.refreshSession();
+            if (error || !data?.session) {
+                throw new Error('Your login session expired. Please sign out and sign back in, then try posting again.');
+            }
+            result = await publish();
+        }
+    } catch (error) {
+        if (error?.name === 'AbortError' || /aborted/i.test(error?.message || '')) {
+            throw new Error('Publishing timed out after 20 seconds. Check your connection and retry; the post has not been confirmed as shared.');
+        }
+        throw error;
+    }
+
+    let error = result.error;
+    if (!error && post.challengeId) {
+        const linkResult = await client.from('feed_posts')
+            .update({ challenge_id: String(post.challengeId) })
+            .eq('id', post.id)
+            .eq('user_id', user.id);
+        error = linkResult.error;
+    }
+    if (error) {
+        console.error('Feed post broadcast failed:', error);
+        if (/jwt expired|token is expired/i.test(error.message || '')) {
+            throw new Error('Your login session expired. Please sign out and sign back in, then try posting again.');
+        }
+        if (error.code === 'PGRST204' || error.code === '42703') {
+            throw new Error('The feed table is missing a column required by this app. Run the 20261018000003_link_duel_feed_posts.sql migration in Supabase, then refresh the app.');
+        }
+        if (error.code === '42P01' || error.code === 'PGRST205'
+            || /feed_posts.*(not found|does not exist)|schema cache/i.test(error.message || '')) {
+            throw new Error('Shared posting is not set up in this Supabase project. Apply the 20261002000000_live_community_feed.sql migration.');
+        }
+        if (error.code === '42501' || /row-level security|permission denied/i.test(error.message || '')) {
+            throw new Error('Supabase refused to publish this post. Check that you are signed in and that the feed_posts policies are applied.');
+        }
+        throw new Error(error.message || 'The post could not be shared. Check your connection and try again.');
+    }
 }
 
 function deleteRemoteFeedPost(postId) {
@@ -173,14 +237,21 @@ function deleteRemoteFeedPost(postId) {
     });
 }
 
-// A like is server-authoritative now, so the count shown to every account
-// agrees. The local toggle happens first so the heart reacts immediately.
-function syncFeedLike(postId) {
+// The server performs the toggle and returns the resulting account state.
+async function syncFeedLike(postId) {
     const client = liveClient();
-    if (!client || !isSignedIn() || !postId) return;
-    client.rpc('toggle_feed_like', { p_post_id: postId }).then(({ error }) => {
-        if (error) console.warn('Feed like sync failed:', error.message || error);
-    });
+    if (!client || !isSignedIn() || !postId) {
+        throw new Error('Sign in to like posts.');
+    }
+    const { data: liked, error: likeError } = await client.rpc('toggle_feed_like', { p_post_id: postId });
+    if (likeError) throw new Error(likeError.message || 'Could not update the like.');
+    const { data: post, error: postError } = await client
+        .from('feed_posts')
+        .select('likes')
+        .eq('id', postId)
+        .single();
+    if (postError) throw new Error(postError.message || 'Could not refresh the like count.');
+    return { liked: Boolean(liked), likes: Number(post.likes) || 0 };
 }
 
 // ── feed fetch ───────────────────────────────────────────────────────────────
@@ -196,9 +267,8 @@ async function fetchLiveFeed(options = {}) {
             .order('created_at', { ascending: false })
             .limit(limit);
 
-        // Before the feed_posts migration is applied the table does not exist.
-        // Treat that as "no server feed" and keep the seeded posts on screen
-        // instead of blanking the section.
+        // Before the feed_posts migration is applied, the server feed is
+        // unavailable and the UI remains empty rather than showing sample data.
         const { data, error } = await query;
         if (error) {
             if (!LIVE.feedLoaded) console.warn('Live feed unavailable:', error.message || error);
@@ -206,40 +276,75 @@ async function fetchLiveFeed(options = {}) {
         }
 
         LIVE.feedLoaded = true;
-        const rows = Array.isArray(data) ? data : [];
+        let rows = Array.isArray(data) ? data : [];
+        if (isSignedIn()) {
+            const { data: privateRows, error: privateRowsError } = await client
+                .from('feed_posts')
+                .select('*')
+                .eq('user_id', currentUser().id)
+                .eq('is_public', false)
+                .eq('type', 'duel')
+                .order('created_at', { ascending: false })
+                .limit(60);
+            if (privateRowsError) {
+                if (privateRowsError.code !== '42703' && privateRowsError.code !== 'PGRST204') {
+                    throw privateRowsError;
+                }
+            } else if (Array.isArray(privateRows)) {
+                const allRows = new Map(rows.map(row => [row.id, row]));
+                privateRows.forEach(row => allRows.set(row.id, row));
+                rows = Array.from(allRows.values());
+            }
+        }
 
-        // Which of these the current player has liked. One extra query, but it
-        // keeps the heart state correct across devices.
+        // Read likes from the relation table so stale client-supplied counts
+        // cannot be displayed as genuine engagement.
         let likedIds = new Set();
-        if (isSignedIn() && rows.length) {
-            try {
-                const { data: likes } = await client
+        const likeCounts = new Map();
+        if (rows.length) {
+            const likes = [];
+            let likeQueryError = null;
+            let rangeStart = 0;
+            while (true) {
+                const { data: page, error } = await client
                     .from('feed_likes')
-                    .select('post_id')
-                    .eq('user_id', currentUser().id);
-                if (Array.isArray(likes)) likedIds = new Set(likes.map(l => l.post_id));
-            } catch (e) { /* likes are cosmetic here */ }
+                    .select('post_id, user_id')
+                    .in('post_id', rows.map(row => row.id))
+                    .order('post_id', { ascending: true })
+                    .order('user_id', { ascending: true })
+                    .range(rangeStart, rangeStart + 999);
+                if (error) {
+                    likeQueryError = error;
+                    break;
+                }
+                likes.push(...(page || []));
+                if (!page || page.length < 1000) break;
+                rangeStart += page.length;
+            }
+            if (likeQueryError) {
+                console.warn('Could not load real feed likes; showing zero counts:', likeQueryError.message || likeQueryError);
+            } else {
+                likes.forEach(like => {
+                    likeCounts.set(like.post_id, (likeCounts.get(like.post_id) || 0) + 1);
+                    if (isSignedIn() && like.user_id === currentUser().id) likedIds.add(like.post_id);
+                });
+            }
         }
 
         const normalised = rows.map(row => {
             const post = normalizeRemotePost(row);
-            if (post) post.likedByMe = likedIds.has(post.id);
+            if (post) {
+                post.likes = likeCounts.get(post.id) || 0;
+                post.likedByMe = likedIds.has(post.id);
+            }
             return post;
-        }).filter(Boolean);
+        }).filter(post => post && (post.isPublic || post.userId === currentUser()?.id));
 
         if (normalised.length) {
-            // The seeded demo posts are local-only (they have no server row), so
-            // keep them underneath the real ones instead of replacing the
-            // section with a shorter list. Only the exact seeded ids qualify —
-            // a real post also happens to start with "post-", so a prefix test
-            // would wrongly drop a user's own post from the feed.
-            const seededIds = new Set(
-                (typeof getSeededFeedPostIds === 'function' ? getSeededFeedPostIds() : [])
-            );
             const local = typeof getSocialFeedPosts === 'function' ? getSocialFeedPosts() : [];
-            const remoteIds = new Set(normalised.map(p => p.id));
-            const seeded = local.filter(p => p.id && !remoteIds.has(p.id) && seededIds.has(p.id));
-            const merged = [...normalised, ...seeded]
+            const postsById = new Map(local.filter(post => post && post.id).map(post => [post.id, post]));
+            normalised.forEach(post => postsById.set(post.id, post));
+            const merged = Array.from(postsById.values())
                 .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
                 .slice(0, 120);
             if (typeof saveSocialFeedPosts === 'function') saveSocialFeedPosts(merged);
@@ -511,12 +616,12 @@ function initPullToRefresh() {
 function handleFeedInsert(row) {
     const post = normalizeRemotePost(row);
     if (!post) return;
-    if (post.author === (currentUser()?.name || '')) {
+    if (post.userId && post.userId === currentUser()?.id) {
         // My own post. It is already on my feed optimistically; only make sure
         // the server's likes count (0) does not clobber the optimistic state.
         return;
     }
-    const changed = mergeRemoteFeedPosts([row]);
+    const changed = mergeRemoteFeedPosts([{ ...row, likes: 0 }]);
     if (!changed) return;
     if (isFeedViewVisible() && typeof renderHomeFeed === 'function') renderHomeFeed();
     announceLiveActivity(post);
